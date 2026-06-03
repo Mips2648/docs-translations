@@ -78,19 +78,24 @@ class DocsTranslator:
         total_translated_lines = 0
 
         for language in self.__target_languages:
+            observed_hashes_in_language: set[str] = set()
 
             for src_file in src_files:
                 rel = src_file.relative_to(src_root)
                 target_file = self.__docs_root / language / rel
-                changed, translated_lines = self.process_file(
+                changed, translated_lines, file_hashes = self.process_file(
                     src_file=src_file,
                     target_file=target_file,
                     language=language
                 )
+                observed_hashes_in_language.update(file_hashes)
                 total_translated_lines += translated_lines
                 if changed:
                     updated_files += 1
                     self.__logger.info(f"Updated {target_file.relative_to(self.__docs_root)}")
+
+            # Clean cache for this language after all files processed
+            self.__cache_manager.clean_unused_hashes(language, observed_hashes_in_language)
 
         self.__cache_manager.save()
 
@@ -248,7 +253,7 @@ class DocsTranslator:
         src_file: Path,
         target_file: Path,
         language: str
-    ) -> Tuple[bool, int]:
+    ) -> Tuple[bool, int, set[str]]:
 
         deepl_lang = LANGUAGES_TO_DEEPL[language]
         lang_cache = self.__cache_manager.get_language_cache(language)
@@ -297,9 +302,6 @@ class DocsTranslator:
                 for h, t in zip(batch_hashes, translated):
                     lang_cache[h] = t
 
-        # Remove stale cache entries for this file/language based on currently observed source hashes.
-        self.__cache_manager.clean_unused_hashes(language, observed_hashes)
-
         render_cache.update(lang_cache)
 
         out_lines: List[str] = []
@@ -321,7 +323,7 @@ class DocsTranslator:
             target_file.parent.mkdir(parents=True, exist_ok=True)
             target_file.write_text(new_content, encoding="utf-8")
 
-        return changed, translated_count
+        return changed, translated_count, observed_hashes
 
     def iter_markdown_files(self, root: Path) -> List[Path]:
         return sorted([p for p in root.rglob("*.md") if p.is_file()])
