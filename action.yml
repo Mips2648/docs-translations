@@ -63,11 +63,10 @@ runs:
         uses: peter-evans/create-pull-request@v7
         with:
           branch: docs-translations
-          base: beta
+          delete-branch: true
           title: "[CI] Update docs translations"
-          commit-message: "chore(docs): update translated markdown"
+          commit-message: "chore(docs): update translations"
           add-paths: |
-            docs/.translation-cache/deepl-docs.json
-            docs/de_DE
-            docs/es_ES
-            docs/en_US
+            docs/.translation-cache/*.json
+            docs/*/*.md
+          body: "Automated translations done by [Mips2648/docs-translations workflow](https://github.com/Mips2648/docs-translations)"
