@@ -1,0 +1,71 @@
+name: Docs Translation
+description: 'Action to translate a markdown file using DeepL API and create a pull request if there are changes.'
+
+inputs:
+  source_language:
+    description: 'Source language for translations, must be one of the following value: "fr_FR | en_US | es_ES | de_DE | it_IT". Default: "fr_FR"'
+    type: string
+    required: false
+    default: 'fr_FR'
+  target_languages:
+    description: 'Target languages for translations, must be a list of comma separated language codes (allowed values are: "fr_FR | en_US | es_ES | de_DE | it_IT"). Default: "en_US,es_ES,de_DE"'
+    type: string
+    required: false
+    default: 'en_US,es_ES,de_DE'
+  deepl_api_key:
+    description: 'deepl API KEY for automatic translation; If provided, missing translations will be automatically translated using deepl API. Please create a free account on https://www.deepl.com'
+    type: string
+    required: true
+    default: ''
+  debug:
+    description: 'Set log level to debug. Default: false'
+    type: boolean
+    required: false
+    default: false
+
+runs:
+  using: "composite"
+  steps:
+      - name: Checkout files
+        uses: actions/checkout@v6
+
+      - name: "Setup python 3.12"
+        uses: actions/setup-python@v6
+        with:
+          python-version: '3.12'
+      - run: pip install -r ${{ github.action_path }}/requirements.txt
+        shell: bash
+
+      - name: Translate docs
+        shell: bash
+        env:
+          target_languages: ${{ inputs.target_languages }}
+          deepl_api_key: ${{ inputs.deepl_api_key }}
+        run: |
+          export PYTHONPATH=$PYTHONPATH:${{ github.action_path }}
+          python -m docstranslations
+
+      - name: Detect translation changes
+        shell: bash
+        id: changes
+        run: |
+          if git diff --quiet -- docs/.translation-cache/deepl-docs.json docs/de_DE docs/es_ES docs/en_US; then
+            echo "No translation changes to commit."
+            echo "has_changes=false" >> "$GITHUB_OUTPUT"
+          else
+            echo "has_changes=true" >> "$GITHUB_OUTPUT"
+          fi
+
+      - name: Open translation pull request
+        if: steps.changes.outputs.has_changes == 'true' && github.event_name != 'pull_request'
+        uses: peter-evans/create-pull-request@v7
+        with:
+          branch: docs-translations
+          base: beta
+          title: "[CI] Update docs translations"
+          commit-message: "chore(docs): update translated markdown"
+          add-paths: |
+            docs/.translation-cache/deepl-docs.json
+            docs/de_DE
+            docs/es_ES
+            docs/en_US

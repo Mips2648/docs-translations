@@ -1,0 +1,16 @@
+# Byte-compiled / optimized / DLL files
+__pycache__/
+*.py[cod]
+*$py.class
+
+# Unit test / coverage reports
+.pytest_cache/
+
+.venv
+.vscode
+docstranslations/tests/fixtures/docs/.translation-cache/
+docstranslations/tests/fixtures/docs/de_DE/
+docstranslations/tests/fixtures/docs/en_US/
+docstranslations/tests/fixtures/docs/es_ES/
+docstranslations/tests/fixtures/docs/it_IT/
+docstranslations/tests/fixtures/docs/pt_PT/
