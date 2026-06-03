@@ -39,8 +39,10 @@ runs:
       - name: Translate docs
         shell: bash
         env:
+          source_language: ${{ inputs.source_language }}
           target_languages: ${{ inputs.target_languages }}
           deepl_api_key: ${{ inputs.deepl_api_key }}
+          debug: ${{ inputs.debug }}
         run: |
           export PYTHONPATH=$PYTHONPATH:${{ github.action_path }}
           python -m docstranslations
