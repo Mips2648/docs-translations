@@ -37,3 +37,16 @@ class CacheManager:
         """Add a translation to the cache."""
         lang_cache = self.get_language_cache(language)
         lang_cache[text_hash] = translation
+
+    def clean_unused_hashes(self, language: str, active_hashes: set[str]) -> int:
+        """Remove cache entries for hashes that no longer exist in source files.
+
+        Returns the number of removed entries.
+        """
+        lang_cache = self.get_language_cache(language)
+        hashes_to_remove = [h for h in lang_cache.keys() if h not in active_hashes]
+
+        for h in hashes_to_remove:
+            del lang_cache[h]
+
+        return len(hashes_to_remove)

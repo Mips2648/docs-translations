@@ -261,6 +261,7 @@ class DocsTranslator:
 
         missing_hash_to_text: Dict[str, str] = {}
         rendered: List[Tuple[bool, str, str, str, str]] = []
+        observed_hashes: set[str] = set()
 
         for idx, src_line in enumerate(src_lines):
             src_translatable, src_prefix, src_text, src_suffix, toggle_src = self.parse_translatable_line(src_line, in_code_src)
@@ -273,6 +274,7 @@ class DocsTranslator:
                 continue
 
             text_hash = self.sha256_text(src_text)
+            observed_hashes.add(text_hash)
             if text_hash not in lang_cache and text_hash in target_translation_map:
                 # Seed cache from an existing marked translation to preserve manual edits.
                 lang_cache[text_hash] = target_translation_map[text_hash]
@@ -294,6 +296,9 @@ class DocsTranslator:
                 self.__api_call_counter += batch_calls
                 for h, t in zip(batch_hashes, translated):
                     lang_cache[h] = t
+
+        # Remove stale cache entries for this file/language based on currently observed source hashes.
+        self.__cache_manager.clean_unused_hashes(language, observed_hashes)
 
         render_cache.update(lang_cache)
 
