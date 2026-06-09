@@ -12,6 +12,11 @@ inputs:
     type: string
     required: false
     default: 'en_US,es_ES,de_DE'
+  documents_root:
+    description: 'Root directory containing language subfolders and the translation cache. Default: "docs"'
+    type: string
+    required: false
+    default: 'docs'
   deepl_api_key:
     description: 'deepl API KEY for automatic translation; If provided, missing translations will be automatically translated using deepl API. Please create a free account on https://www.deepl.com'
     type: string
@@ -39,6 +44,7 @@ runs:
       - name: Translate docs
         shell: bash
         env:
+          documents_root: ${{ inputs.documents_root }}
           source_language: ${{ inputs.source_language }}
           target_languages: ${{ inputs.target_languages }}
           deepl_api_key: ${{ inputs.deepl_api_key }}
@@ -50,8 +56,21 @@ runs:
       - name: Detect translation changes
         shell: bash
         id: changes
+        env:
+          documents_root: ${{ inputs.documents_root }}
+          target_languages: ${{ inputs.target_languages }}
         run: |
-          if git diff --quiet -- docs/.translation-cache/deepl-docs.json docs/de_DE docs/es_ES docs/en_US; then
+          changed_paths=("$documents_root/.translation-cache")
+          IFS=',' read -r -a languages <<< "$target_languages"
+
+          for language in "${languages[@]}"; do
+            language="${language//[[:space:]]/}"
+            if [[ -n "$language" ]]; then
+              changed_paths+=("$documents_root/$language")
+            fi
+          done
+
+          if [[ -z "$(git status --porcelain --untracked-files=all -- "${changed_paths[@]}")" ]]; then
             echo "No translation changes to commit."
             echo "has_changes=false" >> "$GITHUB_OUTPUT"
           else
@@ -67,6 +86,6 @@ runs:
           title: "[CI] Update docs translations"
           commit-message: "chore(docs): update translations"
           add-paths: |
-            docs/.translation-cache/*.json
-            docs/*/*.md
+            ${{ inputs.documents_root }}/.translation-cache/*.json
+            ${{ inputs.documents_root }}/*/*.md
           body: "Automated translations done by [Mips2648/docs-translations workflow](https://github.com/Mips2648/docs-translations)"
