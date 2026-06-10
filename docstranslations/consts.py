@@ -34,7 +34,6 @@ LANGUAGES_TO_DEEPL_GLOSSARY = {
 
 LOG_FORMAT = '[%(levelname)s] : %(message)s'
 
-INPUT_DOCS_ROOT = 'documents_root'
 INPUT_SOURCE_LANGUAGE = 'source_language'
 INPUT_TARGET_LANGUAGES = 'target_languages'
 INPUT_DEEPL_API_KEY = 'deepl_api_key'

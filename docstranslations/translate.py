@@ -17,7 +17,6 @@ from .consts import (
     ALL_LANGUAGES,
     FR_FR,
     DEFAULT_DOCS_ROOT,
-    INPUT_DOCS_ROOT,
     INPUT_SOURCE_LANGUAGE,
     INPUT_DEBUG,
     INPUT_DEEPL_API_KEY,
@@ -51,9 +50,9 @@ class _FrontMatterState:
 
 class DocsTranslator:
 
-    def __init__(self, cwd: Path = Path.cwd()):
+    def __init__(self, cwd: Path = Path.cwd(), docs_root: str = DEFAULT_DOCS_ROOT):
         self.__cwd = cwd.resolve()
-        self.__docs_root = self.__cwd / DEFAULT_DOCS_ROOT
+        self.__docs_root = self.__cwd / docs_root
 
         self.__source_language = FR_FR
         self.__target_languages: list[str] = []
@@ -121,7 +120,6 @@ class DocsTranslator:
         return 0
 
     def __get_inputs(self):
-        self.__docs_root = self._get_path_input(INPUT_DOCS_ROOT, self.__docs_root)
         self.__source_language = self._get_input_in_list(INPUT_SOURCE_LANGUAGE, ALL_LANGUAGES)
         self.__target_languages = self._get_list_input(INPUT_TARGET_LANGUAGES, ALL_LANGUAGES)
         self.__deepl_api_key = self._get_input(INPUT_DEEPL_API_KEY)
@@ -135,18 +133,11 @@ class DocsTranslator:
         self.__logger.info(f"target languages: {self.__target_languages}")
         self.__logger.info(f"debug: {debug}")
         self.__logger.info(f"deepl api key present: {self.__deepl_api_key is not None}")
-        self.__logger.info("=====================================================")
+        self.__logger.info("=====================================================\n")
 
     def _get_input(self, name: str) -> str | None:
         val = os.getenv(name, '').strip()
         return val if val != '' else None
-
-    def _get_path_input(self, name: str, default: Path) -> Path:
-        value = self._get_input(name)
-        path = Path(value) if value is not None else default
-        if not path.is_absolute():
-            path = self.__cwd / path
-        return path.resolve()
 
     def _get_boolean_input(self, name: str) -> bool:
         val = self._get_input(name)
