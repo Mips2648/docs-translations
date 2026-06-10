@@ -55,7 +55,7 @@ class DocsTranslator:
 
         # self.__glossary: dict[str, deepl.GlossaryInfo | None] = {lang: None for lang in self.__target_languages}
 
-        self.__logger.info(f"Translate plugin module version {VERSION} initialized with deepl version {deepl.__version__}")
+        self.__logger.info(f"Translate docs module version {VERSION} initialized with deepl version {deepl.__version__}")
 
     def start(self) -> int:
         if not self.__deepl_api_key:
