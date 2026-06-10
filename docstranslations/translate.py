@@ -5,6 +5,7 @@ import logging
 import os
 import re
 import hashlib
+from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Dict, List, Tuple
 
@@ -29,6 +30,23 @@ IMAGE_ONLY_RE = re.compile(r"^!\[([^\]]*)\]\(([^)]+)\)\s*$")
 LINK_ONLY_RE = re.compile(r"^\[([^\]]+)\]\(([^)]+)\)\s*$")
 HEADING_RE = re.compile(r"^(#{1,6}\s+)(.+)$")
 LIST_RE = re.compile(r"^(\s*(?:(?:[-*+]\s+|\d+\.\s+|>\s+)+))(.+)$")
+FRONT_MATTER_LINE_RE = re.compile(r"^(\s*)([^:#][^:]*?)(\s*:\s*)(.*)$")
+FRONT_MATTER_TEXT_KEYS = {"title", "description", "summary", "excerpt", "subtitle", "headline"}
+
+
+@dataclass
+class _RenderContext:
+    lang_cache: Dict[str, str]
+    target_translation_map: Dict[str, str]
+    missing_hash_to_text: Dict[str, str] = field(default_factory=dict)
+    rendered: List[Tuple[bool, str, str, str, str]] = field(default_factory=list)
+    observed_hashes: set[str] = field(default_factory=set)
+
+
+@dataclass
+class _FrontMatterState:
+    in_front_matter: bool = False
+    front_matter_allowed: bool = True
 
 
 class DocsTranslator:
@@ -164,6 +182,116 @@ class DocsTranslator:
         # If there are no alphabetic chars, skip to avoid wasting API queries.
         return any(ch.isalpha() for ch in text)
 
+    def looks_translatable_front_matter_value(self, key: str, value: str) -> bool:
+        normalized_key = key.strip().lower()
+        if normalized_key == "lang":
+            return False
+
+        if normalized_key in FRONT_MATTER_TEXT_KEYS:
+            return self.looks_translatable(value)
+
+        if len(value) >= 2 and value[0] == value[-1] and value[0] in {'"', "'"}:
+            return self.looks_translatable(value[1:-1])
+
+        return self.looks_translatable(value) and any(ch.isspace() for ch in value)
+
+    def looks_like_front_matter_start(self, lines: List[str], start_index: int) -> bool:
+        if lines[start_index].strip() != "---":
+            return False
+
+        saw_key_value_line = False
+        for candidate in lines[start_index + 1:]:
+            stripped = candidate.strip()
+            if stripped == "":
+                continue
+            if stripped == "---":
+                return saw_key_value_line
+            if FRONT_MATTER_LINE_RE.match(candidate):
+                saw_key_value_line = True
+                continue
+            return False
+
+        return False
+
+    def queue_translatable_text(
+        self,
+        prefix: str,
+        text: str,
+        suffix: str,
+        context: _RenderContext,
+    ) -> None:
+        text_hash = self.sha256_text(text)
+        context.observed_hashes.add(text_hash)
+        if text_hash not in context.lang_cache and text_hash in context.target_translation_map:
+            # Seed cache from an existing marked translation to preserve manual edits.
+            context.lang_cache[text_hash] = context.target_translation_map[text_hash]
+
+        if text_hash not in context.lang_cache:
+            context.missing_hash_to_text[text_hash] = text
+
+        context.rendered.append((True, prefix, text, suffix, text_hash))
+
+    def __process_front_matter_line(
+        self,
+        src_lines: List[str],
+        idx: int,
+        src_line: str,
+        language: str,
+        in_code_src: bool,
+        front_matter_state: _FrontMatterState,
+        context: _RenderContext,
+    ) -> bool:
+        stripped = src_line.strip()
+
+        if front_matter_state.front_matter_allowed and not in_code_src and stripped == "---" and self.looks_like_front_matter_start(src_lines, idx):
+            context.rendered.append((False, "", src_line, "", ""))
+            front_matter_state.in_front_matter = True
+            return True
+
+        if front_matter_state.front_matter_allowed and not front_matter_state.in_front_matter and stripped != "":
+            front_matter_state.front_matter_allowed = False
+
+        if not front_matter_state.in_front_matter:
+            return False
+
+        if stripped == "---":
+            context.rendered.append((False, "", src_line, "", ""))
+            front_matter_state.in_front_matter = False
+            front_matter_state.front_matter_allowed = False
+            return True
+
+        front_matter_match = FRONT_MATTER_LINE_RE.match(src_line)
+        if front_matter_match:
+            indent = front_matter_match.group(1)
+            key = front_matter_match.group(2)
+            separator = front_matter_match.group(3)
+            value = front_matter_match.group(4)
+
+            if key.strip().lower() == "lang":
+                context.rendered.append((False, "", f"{indent}{key}{separator}{language}", "", ""))
+                return True
+
+            if self.looks_translatable_front_matter_value(key, value):
+                prefix = f"{indent}{key}{separator}"
+                suffix = ""
+                text = value
+
+                if len(value) >= 2 and value[0] == value[-1] and value[0] in {'"', "'"}:
+                    prefix = f"{prefix}{value[0]}"
+                    suffix = value[-1]
+                    text = value[1:-1]
+
+                self.queue_translatable_text(
+                    prefix=prefix,
+                    text=text,
+                    suffix=suffix,
+                    context=context,
+                )
+                return True
+
+        context.rendered.append((False, "", src_line, "", ""))
+        return True
+
     def parse_translatable_line(self, line: str, in_code_block: bool) -> Tuple[bool, str, str, str, bool]:
         """Return tuple: (translatable, prefix, text, suffix, toggles_code_block)."""
         stripped = line.rstrip("\n")
@@ -263,35 +391,43 @@ class DocsTranslator:
         render_cache = dict(lang_cache)
 
         in_code_src = False
-
-        missing_hash_to_text: Dict[str, str] = {}
-        rendered: List[Tuple[bool, str, str, str, str]] = []
-        observed_hashes: set[str] = set()
+        front_matter_state = _FrontMatterState()
+        context = _RenderContext(
+            lang_cache=lang_cache,
+            target_translation_map=target_translation_map,
+        )
 
         for idx, src_line in enumerate(src_lines):
+            if self.__process_front_matter_line(
+                src_lines=src_lines,
+                idx=idx,
+                src_line=src_line,
+                language=language,
+                in_code_src=in_code_src,
+                front_matter_state=front_matter_state,
+                context=context,
+            ):
+                continue
+
             src_translatable, src_prefix, src_text, src_suffix, toggle_src = self.parse_translatable_line(src_line, in_code_src)
 
             if toggle_src:
                 in_code_src = not in_code_src
 
             if not src_translatable:
-                rendered.append((False, "", src_line, "", ""))
+                context.rendered.append((False, "", src_line, "", ""))
                 continue
 
-            text_hash = self.sha256_text(src_text)
-            observed_hashes.add(text_hash)
-            if text_hash not in lang_cache and text_hash in target_translation_map:
-                # Seed cache from an existing marked translation to preserve manual edits.
-                lang_cache[text_hash] = target_translation_map[text_hash]
+            self.queue_translatable_text(
+                prefix=src_prefix,
+                text=src_text,
+                suffix=src_suffix,
+                context=context,
+            )
 
-            if text_hash not in lang_cache:
-                missing_hash_to_text[text_hash] = src_text
-
-            rendered.append((True, src_prefix, src_text, src_suffix, text_hash))
-
-        if missing_hash_to_text:
-            hashes = list(missing_hash_to_text.keys())
-            texts = [missing_hash_to_text[h] for h in hashes]
+        if context.missing_hash_to_text:
+            hashes = list(context.missing_hash_to_text.keys())
+            texts = [context.missing_hash_to_text[h] for h in hashes]
 
             batch_size = 40
             for i in range(0, len(texts), batch_size):
@@ -306,7 +442,7 @@ class DocsTranslator:
 
         out_lines: List[str] = []
         translated_count = 0
-        for is_translatable, prefix, value, suffix, text_hash in rendered:
+        for is_translatable, prefix, value, suffix, text_hash in context.rendered:
             if not is_translatable:
                 out_lines.append(value)
                 continue
@@ -323,7 +459,7 @@ class DocsTranslator:
             target_file.parent.mkdir(parents=True, exist_ok=True)
             target_file.write_text(new_content, encoding="utf-8")
 
-        return changed, translated_count, observed_hashes
+        return changed, translated_count, context.observed_hashes
 
     def iter_markdown_files(self, root: Path) -> List[Path]:
         return sorted([p for p in root.rglob("*.md") if p.is_file()])
