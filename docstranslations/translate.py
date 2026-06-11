@@ -65,10 +65,11 @@ class DocsTranslator:
         self.__deepl_api_key: str | None = None
         self.__api_call_counter = 0
 
-        self.__get_inputs()
-
         self.__cache_file = self.__docs_root / ".translation-cache" if cache_path is None else cache_path
         self.__cache_file = self.__cache_file / "deepl-cache.json"
+
+        self.__get_inputs()
+
         self.__cache_manager = CacheManager(self.__cache_file)
 
         self.__logger.info(f"Translate docs module version {VERSION} initialized with deepl version {deepl.__version__}")
