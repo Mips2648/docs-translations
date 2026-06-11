@@ -7,24 +7,24 @@ from pathlib import Path
 class CacheManager:
     """Manage translation cache stored in a JSON file."""
 
-    def __init__(self, cache_path: Path):
-        self.__cache_path = cache_path
+    def __init__(self, cache_file: Path):
+        self.__cache_file = cache_file
         self.__cache: dict = self._load()
 
     def _load(self) -> dict:
         """Load cache from file or return default structure."""
-        if not self.__cache_path.exists():
+        if not self.__cache_file.exists():
             return {"languages": {}}
         try:
-            with self.__cache_path.open("r", encoding="utf-8") as f:
+            with self.__cache_file.open("r", encoding="utf-8") as f:
                 return json.load(f)
         except (json.JSONDecodeError, IOError):
             return {"languages": {}}
 
     def save(self) -> None:
         """Save cache to file."""
-        self.__cache_path.parent.mkdir(parents=True, exist_ok=True)
-        with self.__cache_path.open("w", encoding="utf-8") as f:
+        self.__cache_file.parent.mkdir(parents=True, exist_ok=True)
+        with self.__cache_file.open("w", encoding="utf-8") as f:
             json.dump(self.__cache, f, ensure_ascii=False, indent=2, sort_keys=True)
             f.write("\n")
 

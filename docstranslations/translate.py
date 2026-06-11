@@ -50,7 +50,7 @@ class _FrontMatterState:
 
 class DocsTranslator:
 
-    def __init__(self, cwd: Path = Path.cwd(), docs_root: str = DEFAULT_DOCS_ROOT):
+    def __init__(self, cwd: Path = Path.cwd(), docs_root: str = DEFAULT_DOCS_ROOT, cache_path: Path | None = None):
         self.__cwd = cwd.resolve()
         self.__docs_root = self.__cwd / docs_root
 
@@ -67,10 +67,9 @@ class DocsTranslator:
 
         self.__get_inputs()
 
-        self.__cache_path = self.__docs_root / ".translation-cache" / "deepl-cache.json"
-        self.__cache_manager = CacheManager(self.__cache_path)
-
-        # self.__glossary: dict[str, deepl.GlossaryInfo | None] = {lang: None for lang in self.__target_languages}
+        self.__cache_file = self.__docs_root / ".translation-cache" if cache_path is None else cache_path
+        self.__cache_file = self.__cache_file / "deepl-cache.json"
+        self.__cache_manager = CacheManager(self.__cache_file)
 
         self.__logger.info(f"Translate docs module version {VERSION} initialized with deepl version {deepl.__version__}")
 
@@ -127,10 +126,11 @@ class DocsTranslator:
         if debug:
             self.__logger.setLevel(logging.DEBUG)
 
-        self.__logger.info("=== Run plugin translation with following options ===")
+        self.__logger.info("=== Run docs translation with following options ===")
         self.__logger.info(f"source directory: {self.__docs_root}")
         self.__logger.info(f"source language: {self.__source_language}")
         self.__logger.info(f"target languages: {self.__target_languages}")
+        self.__logger.info(f"cache path: {self.__cache_file}")
         self.__logger.info(f"debug: {debug}")
         self.__logger.info(f"deepl api key present: {self.__deepl_api_key is not None}")
         self.__logger.info("=====================================================\n")
