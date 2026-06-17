@@ -1,12 +1,12 @@
 from pathlib import Path
 
-from docstranslations.consts import (
+from translator.consts import (
     FR_FR,
     INPUT_DEBUG,
     INPUT_SOURCE_LANGUAGE,
     INPUT_TARGET_LANGUAGES,
 )
-from docstranslations.translate import DocsTranslator
+from translator.translator import Translator
 
 
 def test_docs_translator_init_minimal(tmp_path: Path, monkeypatch) -> None:
@@ -14,10 +14,10 @@ def test_docs_translator_init_minimal(tmp_path: Path, monkeypatch) -> None:
     monkeypatch.setenv(INPUT_TARGET_LANGUAGES, "en_US")
     monkeypatch.setenv(INPUT_DEBUG, "false")
 
-    translator = DocsTranslator(tmp_path)
+    translator = Translator(tmp_path)
 
     assert translator is not None
-    assert isinstance(translator, DocsTranslator)
+    assert isinstance(translator, Translator)
 
 
 def test_start_returns_zero_when_source_folder_missing(tmp_path: Path, monkeypatch, caplog) -> None:
@@ -27,7 +27,7 @@ def test_start_returns_zero_when_source_folder_missing(tmp_path: Path, monkeypat
     monkeypatch.setenv("documents_root", "docs")
     monkeypatch.setenv("deepl_api_key", "dummy-key")
 
-    translator = DocsTranslator(tmp_path)
+    translator = Translator(tmp_path)
 
     result = translator.start()
 
@@ -40,7 +40,7 @@ def test_process_file_preserves_front_matter_keys_and_updates_lang(tmp_path: Pat
     monkeypatch.setenv(INPUT_TARGET_LANGUAGES, "es_ES")
     monkeypatch.setenv(INPUT_DEBUG, "false")
 
-    translator = DocsTranslator(tmp_path)
+    translator = Translator(tmp_path)
     translator.deepl_translate = lambda target_lang, texts: (["Documentación Arlo", "Hola"], 1)
 
     src_root = tmp_path / "docs" / FR_FR

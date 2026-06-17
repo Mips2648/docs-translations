@@ -13,12 +13,12 @@ inputs:
     required: false
     default: 'en_US,es_ES,de_DE'
   documents_roots:
-    description: 'Comma-separated root directories containing language subfolders and translation caches. Default: "docs"'
+    description: 'Comma-separated root directories containing language subfolders. Default: "docs"'
     type: string
     required: false
     default: 'docs'
-  cache_path:
-    description: 'Path to the translation cache directory. Default: "docs/.translation-cache"'
+  memory_path:
+    description: 'Path to the translation memory directory. Default: "docs/.translation-memory"'
     type: string
     required: false
     default: ''
@@ -52,12 +52,12 @@ runs:
           documents_roots: ${{ inputs.documents_roots }}
           source_language: ${{ inputs.source_language }}
           target_languages: ${{ inputs.target_languages }}
-          cache_path: ${{ inputs.cache_path }}
+          memory_path: ${{ inputs.memory_path }}
           deepl_api_key: ${{ inputs.deepl_api_key }}
           debug: ${{ inputs.debug }}
         run: |
           export PYTHONPATH=$PYTHONPATH:${{ github.action_path }}
-          python -m docstranslations
+          python -m translator
 
       - name: Open translation pull request
         uses: peter-evans/create-pull-request@v8

@@ -1,6 +1,6 @@
 import pytest
 
-from docstranslations.__main__ import _parse_documents_roots
+from translator.__main__ import _parse_documents_roots
 
 
 def test_parse_documents_roots_trims_and_deduplicates() -> None:

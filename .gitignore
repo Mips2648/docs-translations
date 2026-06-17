@@ -8,9 +8,9 @@ __pycache__/
 
 .venv
 .vscode
-docstranslations/tests/fixtures/docs/.translation-cache/
-docstranslations/tests/fixtures/docs/de_DE/
-docstranslations/tests/fixtures/docs/en_US/
-docstranslations/tests/fixtures/docs/es_ES/
-docstranslations/tests/fixtures/docs/it_IT/
-docstranslations/tests/fixtures/docs/pt_PT/
+translator/tests/fixtures/docs/.translation-cache/
+translator/tests/fixtures/docs/de_DE/
+translator/tests/fixtures/docs/en_US/
+translator/tests/fixtures/docs/es_ES/
+translator/tests/fixtures/docs/it_IT/
+translator/tests/fixtures/docs/pt_PT/

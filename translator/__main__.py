@@ -2,7 +2,7 @@ import os
 from pathlib import Path
 
 from .consts import DEFAULT_DOCS_ROOT
-from .translate import DocsTranslator
+from .translator import Translator
 
 
 def _parse_documents_roots(value: str) -> list[str]:
@@ -30,11 +30,11 @@ def main() -> int:
 
         roots = _parse_documents_roots(documents_roots_str)
 
-        cache_path_str = os.getenv("cache_path")
-        cache_path = Path(cache_path_str) if cache_path_str else None
+        memory_path_str = os.getenv("memory_path")
+        memory_path = Path(memory_path_str) if memory_path_str else None
 
         for root in roots:
-            translator = DocsTranslator(docs_root=root, cache_path=cache_path)
+            translator = Translator(docs_root=root, memory_path=memory_path)
             result = translator.start()
             if result != 0:
                 return result
