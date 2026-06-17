@@ -41,7 +41,15 @@ def test_process_file_preserves_front_matter_keys_and_updates_lang(tmp_path: Pat
     monkeypatch.setenv(INPUT_DEBUG, "false")
 
     translator = Translator(tmp_path)
-    translator.deepl_translate = lambda target_lang, texts: (["Documentación Arlo", "Hola"], 1)
+    mapping = {
+        "Bonjour": "Hola",
+        "Documentation Arlo": "Documentación Arlo",
+    }
+
+    translator.deepl_translate = lambda target_lang, texts: (
+        [mapping[t] for t in texts],
+        len(texts)
+    )
 
     src_root = tmp_path / "docs" / FR_FR
     target_root = tmp_path / "docs" / "es_ES"

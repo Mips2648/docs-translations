@@ -99,6 +99,8 @@ class Translator:
         imported = self.__translation_memory.migrate_from(i18n_dir)
         if imported > 0:
             self.__logger.info(f"Migrated {imported} translations from {i18n_dir} to translation memory.")
+            self.__translation_memory.save()
+            return 0
 
         self.__deepl_translator = deepl.Translator(self.__deepl_api_key)
 
