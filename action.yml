@@ -37,7 +37,7 @@ runs:
   using: "composite"
   steps:
       - name: Checkout files
-        uses: actions/checkout@v6
+        uses: actions/checkout@v7
 
       - name: "Setup python 3.12"
         uses: actions/setup-python@v6
