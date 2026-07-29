@@ -4,6 +4,7 @@ from translator.consts import (
     FR_FR,
     ALL_LANGUAGES
 )
+from translator.structured_files import StructuredMarkdownFile
 from translator.translator import Translator
 
 
@@ -39,13 +40,10 @@ def test_process_file_preserves_front_matter_keys_and_updates_lang(tmp_path: Pat
     )
     mapping = {
         "Bonjour": "Hola",
-        "Documentation Arlo": "Documentación Arlo",
+        "Documentation Arlo": "Documentación Arlo"
     }
 
-    translator.deepl_translate = lambda target_lang, texts: (
-        [mapping[t] for t in texts],
-        len(texts)
-    )
+    translator._deepl_translate = lambda target_lang, texts: [mapping[t] for t in texts]
 
     src_root = tmp_path / "docs" / FR_FR
     target_root = tmp_path / "docs" / "es_ES"
@@ -65,11 +63,11 @@ def test_process_file_preserves_front_matter_keys_and_updates_lang(tmp_path: Pat
         encoding="utf-8",
     )
 
-    changed, translated_count, observed_hashes = translator.process_file(src_file, target_file, "es_ES")
+    parsed_file = StructuredMarkdownFile(src_file)
+    parsed_file.parse()
 
-    assert changed is True
-    assert translated_count == 2
-    assert len(observed_hashes) == 2
+    translator._write_target_file(parsed_file, "es_ES", target_file)
+
     assert target_file.read_text(encoding="utf-8") == (
         "---\n"
         "layout: default\n"

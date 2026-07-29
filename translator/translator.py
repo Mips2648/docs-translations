@@ -1,15 +1,14 @@
 from __future__ import annotations
 
-import json
 import logging
 import re
-from dataclasses import dataclass, field
 from pathlib import Path
-from typing import Dict, List, Tuple
+from typing import List
 from itertools import islice
 
 import deepl
 
+from .structured_files import StructuredMarkdownFile
 from .translation_memory import TranslationMemory
 
 from .version import VERSION
@@ -27,29 +26,6 @@ HEADING_RE = re.compile(r"^(#{1,6}\s+)(.+)$")
 LIST_RE = re.compile(r"^(\s*(?:(?:[-*+]\s+|\d+\.\s+|>\s+)+))(.+)$")
 FRONT_MATTER_LINE_RE = re.compile(r"^(\s*)([^:#][^:]*?)(\s*:\s*)(.*)$")
 FRONT_MATTER_TEXT_KEYS = {"title", "description", "summary", "excerpt", "subtitle", "headline"}
-
-
-@dataclass
-class _RenderContext:
-    translations: Dict[str, str]
-    missing_texts: set[str] = field(default_factory=set)
-    rendered: List[_Line] = field(default_factory=list)
-    observed_texts: set[str] = field(default_factory=set)
-    in_code_src: bool = False
-
-
-@dataclass
-class _FrontMatterState:
-    in_front_matter: bool = False
-    front_matter_allowed: bool = True
-
-
-class _Line():
-    def __init__(self, translatable: bool, prefix: str, text: str, suffix: str):
-        self.is_translatable = translatable
-        self.prefix = prefix
-        self.text = text
-        self.suffix = suffix
 
 
 class Translator:
@@ -79,9 +55,10 @@ class Translator:
         if debug:
             self.__logger.setLevel(logging.DEBUG)
 
-        self.__deepl_translator: deepl.Translator | None = None
-        self.__deepl_api_key: str = deepl_api_key
+        self.__deepl_translator = deepl.Translator(deepl_api_key)
         self.__api_call_counter = 0
+        self.__translated_lines_count = 0
+        self.__updated_files_count = 0
 
         self.__translation_memory = TranslationMemory(self.__translation_memory_path, self.__target_languages)
 
@@ -91,7 +68,6 @@ class Translator:
         self.__logger.info(f"target languages: {self.__target_languages}")
         self.__logger.info(f"translation memory path: {self.__translation_memory_path}")
         self.__logger.info(f"debug: {debug}")
-        self.__logger.info(f"deepl api key present: {self.__deepl_api_key is not None}")
         self.__logger.info("=====================================================\n")
 
     def start(self) -> int:
@@ -100,7 +76,7 @@ class Translator:
             self.__logger.warning(f"Source language {src_root} not found; nothing to do.")
             return 0
 
-        src_files = self.iter_markdown_files(src_root)
+        src_files = self.__iter_markdown_files(src_root)
         if not src_files:
             self.__logger.warning(f"No markdown files in {src_root}; nothing to do.")
             return 0
@@ -111,237 +87,90 @@ class Translator:
             self.__logger.info(f"Migrated {imported} translations from {i18n_dir} to translation memory.")
             self.__translation_memory.save()
 
-        self.__deepl_translator = deepl.Translator(self.__deepl_api_key)
+        parsed_files: list[StructuredMarkdownFile] = []
 
-        updated_files = 0
-        total_translated_lines = 0
+        for src_file_path in src_files:
+            parsed_file = StructuredMarkdownFile(src_file_path)
+            parsed_file.parse()
+            parsed_files.append(parsed_file)
+
+        all_source_translatable_texts: set[str] = set()
+        for parsed_file in parsed_files:
+            all_source_translatable_texts.update(parsed_file.get_translatable_texts())
+
+        self.__translation_memory.clean_unused_text_all_languages(all_source_translatable_texts)
+        self.__translation_memory.save()
 
         for language in self.__target_languages:
-            observed_texts_in_language: set[str] = set()
+            for parsed_file in parsed_files:
 
-            for src_file in src_files:
-                rel = src_file.relative_to(src_root)
+                src_file_path = parsed_file.src_file.relative_to(self.__cwd)
+                rel = parsed_file.src_file.relative_to(src_root)
                 target_file = self.__docs_root / language / rel
-                self.__logger.debug(f"Processing {src_file} -> {target_file} for language {language}")
-                changed, translated_lines, file_texts = self.process_file(
-                    src_file=src_file,
-                    target_file=target_file,
-                    language=language
-                )
-                observed_texts_in_language.update(file_texts)
-                total_translated_lines += translated_lines
-                if changed:
-                    updated_files += 1
-                    self.__logger.info(f"Updated {target_file.relative_to(self.__docs_root)}")
-
-            # Clean cache for this language after all files processed
-            self.__translation_memory.clean_unused_text(language, observed_texts_in_language)
+                target_file_path = target_file.relative_to(self.__cwd)
+                self.__logger.debug(f"Processing {src_file_path} -> {target_file_path} for language {language}")
+                self._write_target_file(parsed_file, language, target_file)
 
         self.__translation_memory.save()
 
-        self.__logger.info(f"Done. Updated files: {updated_files}, translated lines: {total_translated_lines}, api calls: {self.__api_call_counter}")
+        self.__logger.info(f"Done. Updated files: {self.__updated_files_count}, translated lines: {self.__translated_lines_count}, api calls: {self.__api_call_counter}")
         return 0
 
-    def looks_translatable(self, text: str) -> bool:
-        # If there are no alphabetic chars, skip to avoid wasting API queries.
-        return any(ch.isalpha() for ch in text)
+    def _write_target_file(self, parsed_file: StructuredMarkdownFile, language: str, target_file: Path) -> None:
+        out_lines: List[str] = []
 
-    def looks_translatable_front_matter_value(self, key: str, value: str) -> bool:
-        normalized_key = key.strip().lower()
-        if normalized_key == "lang":
-            return False
+        self._ensure_translation_exists(language, parsed_file)
+        lang_memory = self.__translation_memory.get_language_memory(language)
 
-        if normalized_key in FRONT_MATTER_TEXT_KEYS:
-            return self.looks_translatable(value)
-
-        if len(value) >= 2 and value[0] == value[-1] and value[0] in {'"', "'"}:
-            return self.looks_translatable(value[1:-1])
-
-        return self.looks_translatable(value) and any(ch.isspace() for ch in value)
-
-    def looks_like_front_matter_start(self, lines: List[str], start_index: int) -> bool:
-        if lines[start_index].strip() != "---":
-            return False
-
-        saw_key_value_line = False
-        for candidate in lines[start_index + 1:]:
-            stripped = candidate.strip()
-            if stripped == "":
+        for line in parsed_file.get_parsed_lines():
+            if not line.is_translatable:
+                out_lines.append(line.text)
                 continue
-            if stripped == "---":
-                return saw_key_value_line
-            if FRONT_MATTER_LINE_RE.match(candidate):
-                saw_key_value_line = True
+            if line.text not in lang_memory:
+                self.__logger.warning(f"Missing translation for language '{language}': '{line.text}' in file {parsed_file.src_file.relative_to(self.__docs_root)}")
+                out_lines.append(f"{line.prefix}{line.text}{line.suffix}")
                 continue
-            return False
+            out_lines.append(f"{line.prefix}{lang_memory[line.text]}{line.suffix}")
 
-        return False
+        new_content = "\n".join(out_lines) + "\n"
+        old_content = target_file.read_text(encoding="utf-8") if target_file.exists() else ""
+        changed = new_content != old_content
 
-    def queue_translatable_text(
-        self,
-        prefix: str,
-        text: str,
-        suffix: str,
-        context: _RenderContext,
-    ) -> None:
-        context.observed_texts.add(text)
+        if changed:
+            target_file.parent.mkdir(parents=True, exist_ok=True)
+            target_file.write_text(new_content, encoding="utf-8")
+            self.__logger.info(f"Updated {target_file.relative_to(self.__docs_root)}")
+            self.__updated_files_count += 1
 
-        if text not in context.translations:
-            context.missing_texts.add(text)
-
-        context.rendered.append(_Line(True, prefix, text, suffix))
-
-    def __process_front_matter_line(
-        self,
-        src_lines: List[str],
-        idx: int,
-        src_line: str,
-        language: str,
-        front_matter_state: _FrontMatterState,
-        context: _RenderContext,
-    ) -> bool:
-        stripped = src_line.strip()
-
-        if front_matter_state.front_matter_allowed and not context.in_code_src and stripped == "---" and self.looks_like_front_matter_start(src_lines, idx):
-            context.rendered.append(_Line(False, "", src_line, ""))
-            front_matter_state.in_front_matter = True
-            return True
-
-        if front_matter_state.front_matter_allowed and not front_matter_state.in_front_matter and stripped != "":
-            front_matter_state.front_matter_allowed = False
-
-        if not front_matter_state.in_front_matter:
-            return False
-
-        if stripped == "---":
-            context.rendered.append(_Line(False, "", src_line, ""))
-            front_matter_state.in_front_matter = False
-            front_matter_state.front_matter_allowed = False
-            return True
-
-        front_matter_match = FRONT_MATTER_LINE_RE.match(src_line)
-        if front_matter_match:
-            indent = front_matter_match.group(1)
-            key = front_matter_match.group(2)
-            separator = front_matter_match.group(3)
-            value = front_matter_match.group(4)
-
-            if key.strip().lower() == "lang":
-                context.rendered.append(_Line(False, "", f"{indent}{key}{separator}{language}", ""))
-                return True
-
-            if self.looks_translatable_front_matter_value(key, value):
-                prefix = f"{indent}{key}{separator}"
-                suffix = ""
-                text = value
-
-                if len(value) >= 2 and value[0] == value[-1] and value[0] in {'"', "'"}:
-                    prefix = f"{prefix}{value[0]}"
-                    suffix = value[-1]
-                    text = value[1:-1]
-
-                self.queue_translatable_text(
-                    prefix=prefix,
-                    text=text,
-                    suffix=suffix,
-                    context=context,
-                )
-                return True
-
-        context.rendered.append(_Line(False, "", src_line, ""))
-        return True
-
-    def parse_line(self, line: str, context: _RenderContext) -> None:
-        """Return tuple: (translatable, prefix, text, suffix)."""
-        stripped = line.rstrip("\n")
-
-        if stripped.lstrip().startswith("```"):
-            context.in_code_src = not context.in_code_src
-            context.rendered.append(_Line(False, "", line, ""))
-            return
-
-        if context.in_code_src:
-            context.rendered.append(_Line(False, "", line, ""))
-            return
-
-        if stripped.strip() == "":
-            context.rendered.append(_Line(False, "", line, ""))
-            return
-
-        image = IMAGE_ONLY_RE.match(stripped)
-        if image:
-            alt_text = image.group(1)
-            target = image.group(2)
-            if alt_text and self.looks_translatable(alt_text):
-                self.queue_translatable_text(
-                    prefix="![",
-                    text=alt_text,
-                    suffix=f"]({target})",
-                    context=context,
-                )
-                return
-            context.rendered.append(_Line(False, "", line, ""))
-            return
-
-        link = LINK_ONLY_RE.match(stripped)
-        if link:
-            link_text = link.group(1)
-            target = link.group(2)
-            if link_text and self.looks_translatable(link_text):
-                self.queue_translatable_text(
-                    prefix="[",
-                    text=link_text,
-                    suffix=f"]({target})",
-                    context=context,
-                )
-                return
-            context.rendered.append(_Line(False, "", line, ""))
-            return
-
-        heading = HEADING_RE.match(stripped)
-        if heading:
-            text = heading.group(2).strip()
-            if self.looks_translatable(text):
-                self.queue_translatable_text(
-                    prefix=heading.group(1),
-                    text=text,
-                    suffix="",
-                    context=context,
-                )
-                return
-            context.rendered.append(_Line(False, "", line, ""))
-            return
-
-        list_item = LIST_RE.match(stripped)
-        if list_item:
-            text = list_item.group(2).strip()
-            if self.looks_translatable(text):
-                self.queue_translatable_text(
-                    prefix=list_item.group(1),
-                    text=text,
-                    suffix="",
-                    context=context,
-                )
-                return
-            context.rendered.append(_Line(False, "", line, ""))
-            return
-
-        plain = stripped.strip()
-        if self.looks_translatable(plain):
-            self.queue_translatable_text(
-                prefix="",
-                text=plain,
-                suffix="",
-                context=context,
-            )
-            return
-
-        context.rendered.append(_Line(False, "", line, ""))
         return
 
-    def deepl_translate(self, target_lang: str, texts: List[str]) -> Tuple[List[str], int]:
+    def _ensure_translation_exists(self, language: str, parsed_file: StructuredMarkdownFile) -> None:
+        """Ensure that all translatable texts in the parsed file have translations in the memory for the given language."""
+        lang_memory = self.__translation_memory.get_language_memory(language)
+        missing_texts: set[str] = set()
+        for text in parsed_file.get_translatable_texts():
+            if text not in lang_memory:
+                if text == self.__source_language:
+                    lang_memory[text] = language
+                else:
+                    missing_texts.add(text)
+        if missing_texts:
+            batch_size = 40
+            it = iter(missing_texts)
+            while True:
+                batch_texts = list(islice(it, batch_size))
+                if not batch_texts:
+                    break
+                deepl_lang = LANGUAGES_TO_DEEPL[language]
+                translated = self._deepl_translate(deepl_lang, batch_texts)
+
+                for src, tgt in zip(batch_texts, translated):
+                    self.__translated_lines_count += 1
+                    lang_memory[src] = tgt
+
+    def _deepl_translate(self, target_lang: str, texts: List[str]) -> List[str]:
         if not texts:
-            return [], 0
+            return []
 
         if self.__deepl_translator is None:
             raise RuntimeError("DeepL translator not initialized")
@@ -351,95 +180,15 @@ class Translator:
         except deepl.DeepLException as exc:
             raise RuntimeError(f"DeepL error: {exc}") from exc
 
+        self.__api_call_counter += 1
+
         if isinstance(translations, list):
             result = [item.text for item in translations]
         else:
             result = [translations.text]
         if len(result) != len(texts):
             raise RuntimeError("DeepL response size mismatch")
-        return result, 1
+        return result
 
-    def load_json(self, path: Path, default):
-        if not path.exists():
-            return default
-        with path.open("r", encoding="utf-8") as f:
-            return json.load(f)
-
-    def save_json(self, path: Path, data) -> None:
-        path.parent.mkdir(parents=True, exist_ok=True)
-        with path.open("w", encoding="utf-8") as f:
-            json.dump(data, f, ensure_ascii=False, indent=2, sort_keys=True)
-            f.write("\n")
-
-    def process_file(
-        self,
-        src_file: Path,
-        target_file: Path,
-        language: str
-    ) -> Tuple[bool, int, set[str]]:
-
-        deepl_lang = LANGUAGES_TO_DEEPL[language]
-        lang_memory = self.__translation_memory.get_language_memory(language)
-
-        src_lines = src_file.read_text(encoding="utf-8").splitlines()
-
-        front_matter_state = _FrontMatterState()
-        context = _RenderContext(
-            translations=lang_memory,
-        )
-
-        for idx, src_line in enumerate(src_lines):
-            if self.__process_front_matter_line(
-                src_lines=src_lines,
-                idx=idx,
-                src_line=src_line,
-                language=language,
-                front_matter_state=front_matter_state,
-                context=context,
-            ):
-                continue
-
-            self.parse_line(src_line, context)
-
-        if context.missing_texts:
-
-            batch_size = 40
-            it = iter(context.missing_texts)
-            while True:
-                batch_texts = list(islice(it, batch_size))
-                if not batch_texts:
-                    break
-
-                translated, batch_calls = self.deepl_translate(deepl_lang, batch_texts)
-                self.__api_call_counter += batch_calls
-
-                for src, tgt in zip(batch_texts, translated):
-                    lang_memory[src] = tgt
-
-        out_lines: List[str] = []
-        translated_count = 0
-        for line in context.rendered:
-            if not line.is_translatable:
-                out_lines.append(line.text)
-                continue
-            if line.text not in lang_memory:
-                self.__logger.warning(f"Missing translation for language '{language}': '{line.text}' in file {src_file.relative_to(self.__docs_root)}")
-                out_lines.append(f"{line.prefix}{line.text}{line.suffix}")
-                continue
-            translated_value = lang_memory[line.text]
-            out_lines.append(f"{line.prefix}{translated_value}{line.suffix}")
-            if translated_value != line.text:
-                translated_count += 1
-
-        new_content = "\n".join(out_lines) + "\n"
-        old_content = target_file.read_text(encoding="utf-8") if target_file.exists() else ""
-        changed = new_content != old_content
-
-        if changed:
-            target_file.parent.mkdir(parents=True, exist_ok=True)
-            target_file.write_text(new_content, encoding="utf-8")
-
-        return changed, translated_count, context.observed_texts
-
-    def iter_markdown_files(self, root: Path) -> List[Path]:
+    def __iter_markdown_files(self, root: Path) -> List[Path]:
         return sorted([p for p in root.rglob("*.md") if p.is_file()])

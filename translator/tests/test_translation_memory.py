@@ -49,6 +49,22 @@ def test_translation_memory_clean_unused_text(tmp_path: Path) -> None:
     assert en_memory == {"Bonjour": "Hello"}
 
 
+def test_translation_memory_clean_unused_text_all_languages(tmp_path: Path) -> None:
+    memory = TranslationMemory(tmp_path, ALL_LANGUAGES)
+
+    memory.add_translation(EN_US, "Bonjour", "Hello")
+    memory.add_translation(EN_US, "Au revoir", "Goodbye")
+    memory.add_translation(FR_FR, "Bonjour", "Bonjour")
+    memory.add_translation(FR_FR, "Au revoir", "Au revoir")
+
+    removed_count = memory.clean_unused_text_all_languages({"Bonjour"})
+
+    # FR_FR entries are not stored because add_translation skips identical values.
+    assert removed_count == 1
+    assert memory.get_language_memory(EN_US) == {"Bonjour": "Hello"}
+    assert memory.get_language_memory(FR_FR) == {}
+
+
 def test_translation_memory_migrate_from(tmp_path: Path) -> None:
     old_dir = tmp_path / "i18n"
     old_dir.mkdir()

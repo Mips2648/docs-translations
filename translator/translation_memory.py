@@ -61,6 +61,16 @@ class TranslationMemory:
 
         return len(texts_to_remove)
 
+    def clean_unused_text_all_languages(self, active_texts: set[str]) -> int:
+        """Remove unused entries for all configured target languages.
+
+        Returns the total number of removed entries across all languages.
+        """
+        removed_total = 0
+        for language in self.__languages:
+            removed_total += self.clean_unused_text(language, active_texts)
+        return removed_total
+
     def migrate_from(self, old_dir: Path) -> int:
         """
         Migrate old i18n files from old_dir into the current memory structure.
