@@ -18,7 +18,7 @@ inputs:
     required: false
     default: 'docs'
   memory_path:
-    description: 'Path to the translation memory directory. Default: "docs/.translation-memory"'
+    description: 'Path to the translation memory directory. Default: "docs/.translation_memory"'
     type: string
     required: false
     default: ''
