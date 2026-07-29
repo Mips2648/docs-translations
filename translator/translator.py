@@ -110,7 +110,6 @@ class Translator:
         if imported > 0:
             self.__logger.info(f"Migrated {imported} translations from {i18n_dir} to translation memory.")
             self.__translation_memory.save()
-            return 0
 
         self.__deepl_translator = deepl.Translator(self.__deepl_api_key)
 
@@ -123,6 +122,7 @@ class Translator:
             for src_file in src_files:
                 rel = src_file.relative_to(src_root)
                 target_file = self.__docs_root / language / rel
+                self.__logger.debug(f"Processing {src_file} -> {target_file} for language {language}")
                 changed, translated_lines, file_texts = self.process_file(
                     src_file=src_file,
                     target_file=target_file,
