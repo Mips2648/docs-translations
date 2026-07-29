@@ -2,32 +2,28 @@ from pathlib import Path
 
 from translator.consts import (
     FR_FR,
-    INPUT_DEBUG,
-    INPUT_SOURCE_LANGUAGE,
-    INPUT_TARGET_LANGUAGES,
+    ALL_LANGUAGES
 )
 from translator.translator import Translator
 
 
-def test_docs_translator_init_minimal(tmp_path: Path, monkeypatch) -> None:
-    monkeypatch.setenv(INPUT_SOURCE_LANGUAGE, FR_FR)
-    monkeypatch.setenv(INPUT_TARGET_LANGUAGES, "en_US")
-    monkeypatch.setenv(INPUT_DEBUG, "false")
-
-    translator = Translator(tmp_path)
+def test_docs_translator_init_minimal(tmp_path: Path) -> None:
+    translator = Translator(
+        deepl_api_key="dummy-key",
+        target_languages=ALL_LANGUAGES,
+        cwd=tmp_path
+    )
 
     assert translator is not None
     assert isinstance(translator, Translator)
 
 
-def test_start_returns_zero_when_source_folder_missing(tmp_path: Path, monkeypatch, caplog) -> None:
-    monkeypatch.setenv(INPUT_SOURCE_LANGUAGE, FR_FR)
-    monkeypatch.setenv(INPUT_TARGET_LANGUAGES, "en_US")
-    monkeypatch.setenv(INPUT_DEBUG, "false")
-    monkeypatch.setenv("documents_root", "docs")
-    monkeypatch.setenv("deepl_api_key", "dummy-key")
-
-    translator = Translator(tmp_path)
+def test_start_returns_zero_when_source_folder_missing(tmp_path: Path, caplog) -> None:
+    translator = Translator(
+        deepl_api_key="dummy-key",
+        target_languages=ALL_LANGUAGES,
+        cwd=tmp_path
+    )
 
     result = translator.start()
 
@@ -35,12 +31,12 @@ def test_start_returns_zero_when_source_folder_missing(tmp_path: Path, monkeypat
     assert "not found; nothing to do." in caplog.text
 
 
-def test_process_file_preserves_front_matter_keys_and_updates_lang(tmp_path: Path, monkeypatch) -> None:
-    monkeypatch.setenv(INPUT_SOURCE_LANGUAGE, FR_FR)
-    monkeypatch.setenv(INPUT_TARGET_LANGUAGES, "es_ES")
-    monkeypatch.setenv(INPUT_DEBUG, "false")
-
-    translator = Translator(tmp_path)
+def test_process_file_preserves_front_matter_keys_and_updates_lang(tmp_path: Path) -> None:
+    translator = Translator(
+        deepl_api_key="dummy-key",
+        target_languages=ALL_LANGUAGES,
+        cwd=tmp_path
+    )
     mapping = {
         "Bonjour": "Hola",
         "Documentation Arlo": "Documentación Arlo",

@@ -40,3 +40,4 @@ INPUT_DEEPL_API_KEY = 'deepl_api_key'
 INPUT_DEBUG = 'debug'
 
 DEFAULT_DOCS_ROOT = 'docs'
+DEFAULT_MEMORY_SUB_PATH = '.translation_memory'

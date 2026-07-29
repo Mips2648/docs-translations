@@ -1,7 +1,12 @@
-import os
-from pathlib import Path
-
-from .consts import DEFAULT_DOCS_ROOT
+from .consts import (
+    ALL_LANGUAGES,
+    DEFAULT_DOCS_ROOT,
+    INPUT_SOURCE_LANGUAGE,
+    INPUT_DEBUG,
+    INPUT_DEEPL_API_KEY,
+    INPUT_TARGET_LANGUAGES,
+)
+from .inputs_parser import InputsParser
 from .translator import Translator
 
 
@@ -26,15 +31,29 @@ def _parse_documents_roots(value: str) -> list[str]:
 
 def main() -> int:
     try:
-        documents_roots_str = os.getenv("documents_roots", DEFAULT_DOCS_ROOT)
+        inputs_parser = InputsParser()
+        source_language = inputs_parser.read_one_of_str(INPUT_SOURCE_LANGUAGE, ALL_LANGUAGES)
+        target_languages = inputs_parser.read_list(INPUT_TARGET_LANGUAGES, ALL_LANGUAGES)
+        deepl_api_key = inputs_parser.read_str(INPUT_DEEPL_API_KEY)
+        debug = inputs_parser.read_bool(INPUT_DEBUG)
 
-        roots = _parse_documents_roots(documents_roots_str)
+        documents_roots_str = inputs_parser.read_str("documents_roots", DEFAULT_DOCS_ROOT)
 
-        memory_path_str = os.getenv("memory_path")
-        memory_path = Path(memory_path_str) if memory_path_str else None
+        docs_folders = _parse_documents_roots(documents_roots_str)
+        memory_path = inputs_parser.read_str("memory_path")
 
-        for root in roots:
-            translator = Translator(docs_root=root, memory_path=memory_path)
+        if deepl_api_key is None:
+            raise ValueError("DeepL API key not provided. Set the input 'deepl_api_key' to a valid key to enable translations.")
+
+        for folder in docs_folders:
+            translator = Translator(
+                deepl_api_key=deepl_api_key,
+                source_language=source_language,
+                target_languages=target_languages,
+                docs_root=folder,
+                memory_path=memory_path,
+                debug=debug,
+            )
             result = translator.start()
             if result != 0:
                 return result

@@ -2,7 +2,6 @@ from __future__ import annotations
 
 import json
 import logging
-import os
 import re
 from dataclasses import dataclass, field
 from pathlib import Path
@@ -15,13 +14,9 @@ from .translation_memory import TranslationMemory
 
 from .version import VERSION
 from .consts import (
-    ALL_LANGUAGES,
+    DEFAULT_MEMORY_SUB_PATH,
     FR_FR,
     DEFAULT_DOCS_ROOT,
-    INPUT_SOURCE_LANGUAGE,
-    INPUT_DEBUG,
-    INPUT_DEEPL_API_KEY,
-    INPUT_TARGET_LANGUAGES,
     LANGUAGES_TO_DEEPL,
     LOG_FORMAT,
 )
@@ -59,32 +54,47 @@ class _Line():
 
 class Translator:
 
-    def __init__(self, cwd: Path = Path.cwd(), docs_root: str = DEFAULT_DOCS_ROOT, memory_path: Path | None = None):
+    def __init__(self,
+                 deepl_api_key: str,
+                 target_languages: list[str],
+                 cwd: Path = Path.cwd(),
+                 docs_root: str = DEFAULT_DOCS_ROOT,
+                 source_language: str = FR_FR,
+                 memory_path: str | None = None,
+                 debug: bool = False
+                 ):
         self.__cwd = cwd.resolve()
         self.__docs_root = self.__cwd / docs_root
+        if memory_path is not None:
+            self.__translation_memory_path = Path(memory_path)
+        else:
+            self.__translation_memory_path = self.__docs_root / DEFAULT_MEMORY_SUB_PATH
 
-        self.__source_language = FR_FR
-        self.__target_languages: list[str] = []
+        self.__source_language = source_language
+        self.__target_languages: list[str] = target_languages
 
         self.__logger = logging.getLogger(__name__)
         logging.basicConfig(level=logging.INFO, format=LOG_FORMAT)
         logging.getLogger('deepl').setLevel(logging.WARNING)
+        if debug:
+            self.__logger.setLevel(logging.DEBUG)
 
         self.__deepl_translator: deepl.Translator | None = None
-        self.__deepl_api_key: str | None = None
+        self.__deepl_api_key: str = deepl_api_key
         self.__api_call_counter = 0
 
-        self.__get_inputs()
+        self.__translation_memory = TranslationMemory(self.__translation_memory_path, self.__target_languages)
 
-        self.__translation_memory = TranslationMemory(self.__docs_root / ".translation-memory", self.__target_languages)
-
-        self.__logger.info(f"Translate docs module version {VERSION} initialized with deepl version {deepl.__version__}")
+        self.__logger.info(f"=== Translate docs module version {VERSION} initialized with deepl version {deepl.__version__} with following options ===")
+        self.__logger.info(f"source directory: {self.__docs_root}")
+        self.__logger.info(f"source language: {self.__source_language}")
+        self.__logger.info(f"target languages: {self.__target_languages}")
+        self.__logger.info(f"translation memory path: {self.__translation_memory_path}")
+        self.__logger.info(f"debug: {debug}")
+        self.__logger.info(f"deepl api key present: {self.__deepl_api_key is not None}")
+        self.__logger.info("=====================================================\n")
 
     def start(self) -> int:
-        if not self.__deepl_api_key:
-            self.__logger.warning("DeepL API key not provided. Set the input 'deepl_api_key' to a valid key to enable translations.")
-            return 0
-
         src_root = self.__docs_root / self.__source_language
         if not src_root.exists():
             self.__logger.warning(f"Source language {src_root} not found; nothing to do.")
@@ -131,54 +141,6 @@ class Translator:
 
         self.__logger.info(f"Done. Updated files: {updated_files}, translated lines: {total_translated_lines}, api calls: {self.__api_call_counter}")
         return 0
-
-    def __get_inputs(self):
-        self.__source_language = self._get_input_in_list(INPUT_SOURCE_LANGUAGE, ALL_LANGUAGES)
-        self.__target_languages = self._get_list_input(INPUT_TARGET_LANGUAGES, ALL_LANGUAGES)
-        self.__deepl_api_key = self._get_input(INPUT_DEEPL_API_KEY)
-        debug = self._get_boolean_input(INPUT_DEBUG)
-        if debug:
-            self.__logger.setLevel(logging.DEBUG)
-
-        self.__logger.info("=== Run docs translation with following options ===")
-        self.__logger.info(f"source directory: {self.__docs_root}")
-        self.__logger.info(f"source language: {self.__source_language}")
-        self.__logger.info(f"target languages: {self.__target_languages}")
-        self.__logger.info(f"translation memory path: {self.__docs_root / '.translation-memory'}")
-        self.__logger.info(f"debug: {debug}")
-        self.__logger.info(f"deepl api key present: {self.__deepl_api_key is not None}")
-        self.__logger.info("=====================================================\n")
-
-    def _get_input(self, name: str) -> str | None:
-        val = os.getenv(name, '').strip()
-        return val if val != '' else None
-
-    def _get_boolean_input(self, name: str) -> bool:
-        val = self._get_input(name)
-        true_values = ['true', 'True', 'TRUE']
-        false_values = ['false', 'False', 'FALSE']
-        if val in true_values:
-            return True
-        elif val in false_values:
-            return False
-        else:
-            raise ValueError(f'Input does not meet specifications: {name}.\n Support boolean input list: "true | True | TRUE | false | False | FALSE"')
-
-    def _get_list_input(self, name: str, allowed_values: list) -> list[str]:
-        val = self._get_input(name)
-        if val is None:
-            raise ValueError(f'Input does not meet specifications: {name}.\n {name} is required')
-        values = [s.strip() for s in val.split(',')]
-        for s in values:
-            if s not in allowed_values:
-                raise ValueError(f'Input does not meet specifications: {name}.\n {s} not in list: {allowed_values}')
-        return values
-
-    def _get_input_in_list(self, name: str, allowed_values: list) -> str:
-        val = self._get_input(name)
-        if val is None or val not in allowed_values:
-            raise ValueError(f'Input does not meet specifications: {name}.\n {val} not in list: {allowed_values}')
-        return val
 
     def looks_translatable(self, text: str) -> bool:
         # If there are no alphabetic chars, skip to avoid wasting API queries.
