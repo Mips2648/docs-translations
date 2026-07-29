@@ -1,23 +1,55 @@
 # Docs Translations
 
-A composite GitHub Action that translates Markdown documentation with DeepL and opens one pull request containing all generated translations.
+A composite GitHub Action that translates Markdown documentation with DeepL and proposes changes through a pull request.
 
-Each documentation root contains one directory per language and its own `.translation-cache` directory. A typical layout is:
+## How It Works
+
+The action:
+
+1. reads Markdown files from the source folder (`<documents_root>/<source_language>`),
+2. translates missing texts into each target language,
+3. updates target files (`<documents_root>/<target_language>`),
+4. updates JSON translation memory,
+5. creates or updates a technical PR (`docs-translations`) when changes are detected.
+
+A single run can process multiple documentation roots (`documents_roots`) and generate one PR for all changes.
+
+## Expected Structure
+
+By default, the documentation root is `docs`:
+
+```text
+docs/
+  fr_FR/
+  en_US/
+  es_ES/
+  de_DE/
+  .translation_memory/
+```
+
+Multi-root example:
 
 ```text
 arlo/
   fr_FR/
   en_US/
-  .translation-cache/
+  .translation_memory/
 portainer/
   fr_FR/
   en_US/
-  .translation-cache/
+  .translation_memory/
 ```
+
+## Prerequisites
+
+- A valid `DEEPL_API_KEY` secret.
+- The following GitHub Actions workflow permissions:
+  - `contents: write`
+  - `pull-requests: write`
 
 ## Usage
 
-Grant the workflow `contents: write` and `pull-requests: write` permissions, then add the action to a workflow:
+### Multi-root Example
 
 ```yaml
 name: Translate documentation
@@ -33,45 +65,47 @@ jobs:
   translate:
     runs-on: ubuntu-latest
     steps:
-      - uses: Mips2648/docs-translations@main
+      - uses: Mips2648/docs-translations@v1
         with:
           deepl_api_key: ${{ secrets.DEEPL_API_KEY }}
           target_languages: "en_US,es_ES,de_DE"
           documents_roots: "arlo,portainer"
 ```
 
-The action translates each root in sequence, then creates at most one commit and one pull request containing changes from all roots. Pull requests are not opened when the action runs in a `pull_request` event.
+### Single-root Example (Default)
+
+If your documentation is in `docs/<language>`, you only need to provide the DeepL key:
+
+```yaml
+- uses: Mips2648/docs-translations@v1
+  with:
+    deepl_api_key: ${{ secrets.DEEPL_API_KEY }}
+```
 
 ## Inputs
 
 | Name | Description | Type | Default |
 | --- | --- | --- | --- |
-| `deepl_api_key` | DeepL API key used for automatic translation. | `string` | Required |
-| `source_language` | Language directory containing source Markdown. | `string` | `fr_FR` |
-| `target_languages` | Comma-separated target language directories. | `string` | `en_US,es_ES,de_DE` |
-| `documents_roots` | Comma-separated documentation roots. Entries are trimmed and must be relative paths without `..`. | `string` | `docs` |
-| `debug` | Enable debug logging. | `boolean` | `false` |
+| `deepl_api_key` | DeepL API key (required). | `string` | Required |
+| `source_language` | Source language folder. Supported values: `fr_FR`, `en_US`, `es_ES`, `de_DE`, `it_IT`, `pt_PT`. | `string` | `fr_FR` |
+| `target_languages` | Comma-separated list of target languages. Same supported values as above. | `string` | `en_US,es_ES,de_DE` |
+| `documents_roots` | Comma-separated documentation roots. Each entry is normalized, deduplicated, must be relative, and must not contain `..`. | `string` | `docs` |
+| `memory_path` | Path to the translation memory directory. If empty/not provided: `<documents_root>/.translation_memory`. | `string` | `""` |
+| `debug` | Enables verbose logs. Accepted values: `true`, `True`, `TRUE`, `false`, `False`, `FALSE`. | `boolean` | `false` |
 
-Supported languages are `fr_FR`, `en_US`, `es_ES`, `de_DE`, `it_IT`, and `pt_PT`.
+## Important Notes
 
-## Outputs
+- Source files are read from `<documents_root>/<source_language>`.
+- Translations are written to `<documents_root>/<target_language>`.
+- Translation memory is stored as JSON, one file per language (`<language>.json`).
+- If no files change, the PR creation step does not create a PR.
 
-| Name | Description |
-| --- | --- |
-| `has_changes` | `true` when generated Markdown or translation cache files changed in any selected root; otherwise `false`. |
+## PR Behavior
 
-The generated pull request includes `.translation-cache/*.json` and translated Markdown files for every selected root and target language. Source files and unrelated files are not added to the automated commit.
+The action uses `peter-evans/create-pull-request` with:
 
-## Single-root usage
+- branch: `docs-translations`
+- title: `[CI] Update docs translations`
+- commit message: `chore(docs): update translations`
 
-`documents_roots` defaults to `docs`, so repositories with a `docs/<language>` layout only need the API key:
-
-```yaml
-- uses: Mips2648/docs-translations@main
-  id: translations
-  with:
-    deepl_api_key: ${{ secrets.DEEPL_API_KEY }}
-
-- name: Report translation changes
-  run: echo "Translations changed: ${{ steps.translations.outputs.has_changes }}"
-```
+The PR includes changes from all processed roots in the run.
