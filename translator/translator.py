@@ -68,14 +68,12 @@ class Translator:
 
         self.__translation_memory = TranslationMemory(self.__translation_memory_path, self.__target_languages)
 
-        self.__logger.info(
-            f"\n=== Translate docs module version {VERSION} initialized with deepl version {deepl.__version__} with following options ===\n"
-            f"source directory: {self.__docs_root.relative_to(self.__cwd)}\n"
-            f"source language: {self.__source_language}\n"
-            f"target languages: {self.__target_languages}\n"
-            f"translation memory path: {self.__translation_memory_path.relative_to(self.__cwd)}\n"
-            f"debug: {debug}\n"
-        )
+        self.__logger.info(f"=== Translate docs module version {VERSION} initialized with deepl version {deepl.__version__} with following options ===")
+        self.__logger.info(f"source directory: ./{self.__docs_root.relative_to(self.__cwd)}")
+        self.__logger.info(f"source language: {self.__source_language}")
+        self.__logger.info(f"target languages: {self.__target_languages}")
+        self.__logger.info(f"translation memory path: ./{self.__translation_memory_path.relative_to(self.__cwd)}")
+        self.__logger.info(f"debug: {debug}")
 
     def start(self) -> int:
         src_root = self.__docs_root / self.__source_language
@@ -120,13 +118,10 @@ class Translator:
 
         self.__translation_memory.save()
 
-        self.__logger.info(
-            "Done.\n"
-            f"Updated files: {self.__updated_files_count}\n"
-            f"translated lines: {self.__translated_lines_count}\n"
-            f"api calls: {self.__api_call_counter}\n"
-            "========================================================================================================================="
-        )
+        self.__logger.info(f"Number of files updated: {self.__updated_files_count}")
+        self.__logger.info(f"Number of lines translated: {self.__translated_lines_count}")
+        self.__logger.info(f"Number of API calls: {self.__api_call_counter}")
+        self.__logger.info("=" * 120)
         return 0
 
     def _write_target_file(self, parsed_file: StructuredMarkdownFile, language: str, target_file: Path) -> None:
@@ -140,7 +135,7 @@ class Translator:
                 out_lines.append(line.text)
                 continue
             if line.text not in lang_memory:
-                self.__logger.warning(f"Missing translation for language '{language}': '{line.text}' in file {parsed_file.src_file.relative_to(self.__cwd)}")
+                self.__logger.warning(f"Missing translation for language '{language}': '{line.text}' in file ./{parsed_file.src_file.relative_to(self.__cwd)}")
                 out_lines.append(f"{line.prefix}{line.text}{line.suffix}")
                 continue
             out_lines.append(f"{line.prefix}{lang_memory[line.text]}{line.suffix}")
@@ -152,7 +147,7 @@ class Translator:
         if changed:
             target_file.parent.mkdir(parents=True, exist_ok=True)
             target_file.write_text(new_content, encoding="utf-8")
-            self.__logger.info(f"Updated {target_file.relative_to(self.__cwd)}")
+            self.__logger.info(f"Updated ./{target_file.relative_to(self.__cwd)}")
             self.__updated_files_count += 1
 
         return
@@ -214,7 +209,7 @@ class Translator:
 
         if not self.__glossary:
             for deepl_glossary in self.__deepl_client.list_multilingual_glossaries():
-                self.__logger.info(f"Found glossary: {deepl_glossary.name} (ID: {deepl_glossary.glossary_id})")
+                self.__logger.info(f"Found glossary: {deepl_glossary.name}")
                 self.__glossary = deepl_glossary
 
         deepl_target_language = LANGUAGES_TO_DEEPL_GLOSSARY[target_lang]
