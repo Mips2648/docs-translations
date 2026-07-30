@@ -2,6 +2,8 @@
 
 A composite GitHub Action that translates Markdown documentation with DeepL and proposes changes through a pull request.
 
+[![Tests](https://github.com/Mips2648/docs-translations/actions/workflows/pytest.yml/badge.svg)](https://github.com/Mips2648/docs-translations/actions/workflows/pytest.yml)
+
 ## How It Works
 
 The action:
