@@ -90,3 +90,40 @@ def test_process_file_preserves_front_matter_keys_and_updates_lang(tmp_path: Pat
         "\n"
         "# Hola\n"
     )
+
+
+def test_start_translates_nested_source_language_directories(tmp_path: Path) -> None:
+    """Files in nested fr_FR directories (e.g. plugin1/fr_FR and plugin1/beta/fr_FR)
+    are both discovered and translated, with the target placed in the same structure."""
+    translator = Translator(
+        deepl_api_key="dummy-key",
+        target_languages=["en_US"],
+        cwd=tmp_path,
+        docs_roots=["docs"],
+        memory_path=str(tmp_path / "memory.json"),
+    )
+
+    mapping = {"Bonjour": "Hello", "Beta": "Beta"}
+    translator._deepl_translate = lambda target_lang, texts: [mapping[t] for t in texts]
+
+    # plugin1/fr_FR/index.md
+    src1 = tmp_path / "docs" / "plugin1" / FR_FR
+    src1.mkdir(parents=True)
+    (src1 / "index.md").write_text("# Bonjour\n", encoding="utf-8")
+
+    # plugin1/beta/fr_FR/index.md
+    src2 = tmp_path / "docs" / "plugin1" / "beta" / FR_FR
+    src2.mkdir(parents=True)
+    (src2 / "index.md").write_text("# Beta\n", encoding="utf-8")
+
+    result = translator.start()
+
+    assert result == 0
+
+    target1 = tmp_path / "docs" / "plugin1" / "en_US" / "index.md"
+    assert target1.exists(), "Expected translated file at plugin1/en_US/index.md"
+    assert target1.read_text(encoding="utf-8") == "# Hello\n"
+
+    target2 = tmp_path / "docs" / "plugin1" / "beta" / "en_US" / "index.md"
+    assert target2.exists(), "Expected translated file at plugin1/beta/en_US/index.md"
+    assert target2.read_text(encoding="utf-8") == "# Beta\n"

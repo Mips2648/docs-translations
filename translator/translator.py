@@ -83,29 +83,30 @@ class Translator:
         all_root_files: list[tuple[Path, list[StructuredMarkdownFile]]] = []
 
         for docs_root in self.__docs_roots:
-            src_root = docs_root / self.__source_language
-            if not src_root.exists():
-                self.__logger.warning(f"Source language {src_root} not found; skipping.")
-                continue
-
-            src_files = self.__iter_markdown_files(src_root)
-            if not src_files:
-                self.__logger.warning(f"No markdown files in {src_root}; skipping.")
-                continue
-
             i18n_dir = docs_root / "i18n"
             imported = self.__translation_memory.migrate_from(i18n_dir)
             if imported > 0:
                 self.__logger.info(f"Migrated {imported} translations from {i18n_dir} to translation memory.")
                 self.__translation_memory.save()
 
-            parsed_files: list[StructuredMarkdownFile] = []
-            for src_file_path in src_files:
-                parsed_file = StructuredMarkdownFile(src_file_path)
-                parsed_file.parse()
-                parsed_files.append(parsed_file)
+            src_roots = sorted([p for p in docs_root.rglob("*") if p.is_dir() and p.name == self.__source_language])
+            if not src_roots:
+                self.__logger.warning(f"No source language directory '{self.__source_language}' found under {docs_root}; skipping.")
+                continue
 
-            all_root_files.append((src_root, parsed_files))
+            for src_root in src_roots:
+                src_files = self.__iter_markdown_files(src_root)
+                if not src_files:
+                    self.__logger.warning(f"No markdown files in {src_root}; skipping.")
+                    continue
+
+                parsed_files: list[StructuredMarkdownFile] = []
+                for src_file_path in src_files:
+                    parsed_file = StructuredMarkdownFile(src_file_path)
+                    parsed_file.parse()
+                    parsed_files.append(parsed_file)
+
+                all_root_files.append((src_root, parsed_files))
 
         if not all_root_files:
             self.__logger.warning("No source files found in any configured root; nothing to do.")
