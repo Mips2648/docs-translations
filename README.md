@@ -75,7 +75,7 @@ jobs:
   translate:
     runs-on: ubuntu-latest
     steps:
-      - uses: Mips2648/docs-translations@v1
+      - uses: Mips2648/docs-translations@v2
         with:
           deepl_api_key: ${{ secrets.DEEPL_API_KEY }}
           target_languages: "en_US,es_ES,de_DE"
@@ -116,7 +116,7 @@ jobs:
   translate:
     runs-on: ubuntu-latest
     steps:
-      - uses: Mips2648/docs-translations@v1
+      - uses: Mips2648/docs-translations@v2
         with:
             deepl_api_key: ${{ secrets.DEEPL_API_KEY }}
             target_languages: ${{ github.event_name == 'workflow_dispatch' && github.event.inputs.target_languages || 'en_US,es_ES,de_DE' }}
