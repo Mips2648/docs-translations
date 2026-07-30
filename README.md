@@ -8,9 +8,9 @@ A composite GitHub Action that translates Markdown documentation with DeepL and 
 
 The action:
 
-1. reads Markdown files from the source folder (`<documents_root>/<source_language>`),
+1. recursively discovers all `<source_language>` folders anywhere under each `<documents_root>`,
 2. translates missing texts into each target language,
-3. updates target files (`<documents_root>/<target_language>`),
+3. writes translated files next to each discovered source folder (`<parent>/<target_language>`), preserving the full directory structure,
 4. updates JSON translation memory,
 5. creates or updates a technical PR (`docs-translations`) when changes are detected.
 
@@ -29,6 +29,18 @@ docs/
   .translation_memory/
 ```
 
+Source language folders are discovered **recursively** inside each `documents_root`. This means you can have multiple versioned or grouped sub-sections, each with their own `fr_FR` folder:
+
+```text
+docs/
+  fr_FR/          ← discovered and translated
+  en_US/          ← generated here
+  beta/
+    fr_FR/        ← also discovered and translated
+    en_US/        ← generated here (same relative structure)
+  .translation_memory/
+```
+
 If you have a central repository for your documentation, you probably have a structure like this multi-root example:
 
 ```text
@@ -36,10 +48,18 @@ arlo/
   fr_FR/
   en_US/
   es_ES/
+  beta/
+    fr_FR/
+    en_US/
+    es_ES/
 portainer/
   fr_FR/
   en_US/
   es_ES/
+  beta/
+    fr_FR/
+    en_US/
+    es_ES/
 .translation_memory/
 ```
 
@@ -80,7 +100,7 @@ jobs:
   translate:
     runs-on: ubuntu-latest
     steps:
-      - uses: Mips2648/docs-translations@v2
+      - uses: Mips2648/docs-translations@v3
         with:
           deepl_api_key: ${{ secrets.DEEPL_API_KEY }}
           target_languages: "en_US,es_ES,de_DE"
@@ -121,7 +141,7 @@ jobs:
   translate:
     runs-on: ubuntu-latest
     steps:
-      - uses: Mips2648/docs-translations@v2
+      - uses: Mips2648/docs-translations@v3
         with:
             deepl_api_key: ${{ secrets.DEEPL_API_KEY }}
             target_languages: ${{ github.event_name == 'workflow_dispatch' && github.event.inputs.target_languages || 'en_US,es_ES,de_DE' }}
@@ -141,8 +161,8 @@ jobs:
 
 ## Important Notes
 
-- Source files are read from `<documents_root>/<source_language>`.
-- Translations are written to `<documents_root>/<target_language>`.
+- All `<source_language>` folders found recursively under each `<documents_root>` are processed.
+- Translations are written alongside each discovered source folder: `<parent_of_source_language_folder>/<target_language>`.
 - Translation memory is stored as JSON, one file per language (`<language>.json`).
 - If no files change, the PR creation step does not create a PR.
 - This workflow does not create a glossary due to the limitation on deepl free account on which only one glossary is allowed. So it is assumed that you also use the action `Mips2648/plugins-translations` and that the glossary has been already created by this action.
