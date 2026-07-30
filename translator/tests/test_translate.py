@@ -1,5 +1,7 @@
 from pathlib import Path
 
+import pytest
+
 from translator.consts import (
     FR_FR,
     ALL_LANGUAGES
@@ -29,7 +31,17 @@ def test_start_returns_zero_when_source_folder_missing(tmp_path: Path, caplog) -
     result = translator.start()
 
     assert result == 0
-    assert "not found; nothing to do." in caplog.text
+    assert "nothing to do." in caplog.text
+
+
+def test_multiple_docs_roots_require_memory_path(tmp_path: Path) -> None:
+    with pytest.raises(ValueError, match="memory_path is required when multiple docs_roots are configured"):
+        Translator(
+            deepl_api_key="dummy-key",
+            target_languages=ALL_LANGUAGES,
+            cwd=tmp_path,
+            docs_roots=["docs", "plugins/docs"],
+        )
 
 
 def test_process_file_preserves_front_matter_keys_and_updates_lang(tmp_path: Path) -> None:

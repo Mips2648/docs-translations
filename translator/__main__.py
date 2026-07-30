@@ -46,21 +46,16 @@ def main() -> int:
         if deepl_api_key is None:
             raise ValueError("DeepL API key not provided. Set the input 'deepl_api_key' to a valid key to enable translations.")
 
-        for folder in docs_folders:
-            translator = Translator(
-                deepl_api_key=deepl_api_key,
-                source_language=source_language,
-                target_languages=target_languages,
-                docs_root=folder,
-                memory_path=memory_path,
-                use_glossary=use_glossary,
-                debug=debug,
-            )
-            result = translator.start()
-            if result != 0:
-                return result
-
-        return 0
+        translator = Translator(
+            deepl_api_key=deepl_api_key,
+            source_language=source_language,
+            target_languages=target_languages,
+            docs_roots=docs_folders,
+            memory_path=memory_path,
+            use_glossary=use_glossary,
+            debug=debug,
+        )
+        return translator.start()
     except ValueError as exc:
         print(f"Error: {exc}", file=__import__("sys").stderr)
         return 1

@@ -36,18 +36,22 @@ class Translator:
                  deepl_api_key: str,
                  target_languages: list[str],
                  cwd: Path = Path.cwd(),
-                 docs_root: str = DEFAULT_DOCS_ROOT,
+                 docs_roots: list[str] | None = None,
                  source_language: str = FR_FR,
                  memory_path: str | None = None,
                  use_glossary: bool = True,
                  debug: bool = False
                  ):
         self.__cwd = cwd.resolve()
-        self.__docs_root = self.__cwd / docs_root
+        if docs_roots is None:
+            docs_roots = [DEFAULT_DOCS_ROOT]
+        self.__docs_roots: list[Path] = [self.__cwd / r for r in docs_roots]
         if memory_path is not None:
             self.__translation_memory_path = Path(memory_path)
         else:
-            self.__translation_memory_path = self.__docs_root / DEFAULT_MEMORY_SUB_PATH
+            if len(self.__docs_roots) != 1:
+                raise ValueError("memory_path is required when multiple docs_roots are configured")
+            self.__translation_memory_path = self.__docs_roots[0] / DEFAULT_MEMORY_SUB_PATH
 
         self.__source_language = source_language
         self.__target_languages: list[str] = target_languages
@@ -69,52 +73,61 @@ class Translator:
         self.__translation_memory = TranslationMemory(self.__translation_memory_path, self.__target_languages)
 
         self.__logger.info(f"=== Translate docs module version {VERSION} initialized with deepl version {deepl.__version__} with following options ===")
-        self.__logger.info(f"source directory: ./{self.__docs_root.relative_to(self.__cwd)}")
+        self.__logger.info(f"source directories: {[str(r.relative_to(self.__cwd)) for r in self.__docs_roots]}")
         self.__logger.info(f"source language: {self.__source_language}")
         self.__logger.info(f"target languages: {self.__target_languages}")
         self.__logger.info(f"translation memory path: ./{self.__translation_memory_path.relative_to(self.__cwd)}")
         self.__logger.info(f"debug: {debug}")
 
     def start(self) -> int:
-        src_root = self.__docs_root / self.__source_language
-        if not src_root.exists():
-            self.__logger.warning(f"Source language {src_root} not found; nothing to do.")
+        all_root_files: list[tuple[Path, list[StructuredMarkdownFile]]] = []
+
+        for docs_root in self.__docs_roots:
+            src_root = docs_root / self.__source_language
+            if not src_root.exists():
+                self.__logger.warning(f"Source language {src_root} not found; skipping.")
+                continue
+
+            src_files = self.__iter_markdown_files(src_root)
+            if not src_files:
+                self.__logger.warning(f"No markdown files in {src_root}; skipping.")
+                continue
+
+            i18n_dir = docs_root / "i18n"
+            imported = self.__translation_memory.migrate_from(i18n_dir)
+            if imported > 0:
+                self.__logger.info(f"Migrated {imported} translations from {i18n_dir} to translation memory.")
+                self.__translation_memory.save()
+
+            parsed_files: list[StructuredMarkdownFile] = []
+            for src_file_path in src_files:
+                parsed_file = StructuredMarkdownFile(src_file_path)
+                parsed_file.parse()
+                parsed_files.append(parsed_file)
+
+            all_root_files.append((src_root, parsed_files))
+
+        if not all_root_files:
+            self.__logger.warning("No source files found in any configured root; nothing to do.")
             return 0
-
-        src_files = self.__iter_markdown_files(src_root)
-        if not src_files:
-            self.__logger.warning(f"No markdown files in {src_root}; nothing to do.")
-            return 0
-
-        i18n_dir = self.__docs_root / "i18n"
-        imported = self.__translation_memory.migrate_from(i18n_dir)
-        if imported > 0:
-            self.__logger.info(f"Migrated {imported} translations from {i18n_dir} to translation memory.")
-            self.__translation_memory.save()
-
-        parsed_files: list[StructuredMarkdownFile] = []
-
-        for src_file_path in src_files:
-            parsed_file = StructuredMarkdownFile(src_file_path)
-            parsed_file.parse()
-            parsed_files.append(parsed_file)
 
         all_source_translatable_texts: set[str] = set()
-        for parsed_file in parsed_files:
-            all_source_translatable_texts.update(parsed_file.get_translatable_texts())
+        for src_root, parsed_files in all_root_files:
+            for parsed_file in parsed_files:
+                all_source_translatable_texts.update(parsed_file.get_translatable_texts())
 
         self.__translation_memory.clean_unused_text_all_languages(all_source_translatable_texts)
         self.__translation_memory.save()
 
         for language in self.__target_languages:
-            for parsed_file in parsed_files:
-
-                src_file_path = parsed_file.src_file.relative_to(self.__cwd)
-                rel = parsed_file.src_file.relative_to(src_root)
-                target_file = self.__docs_root / language / rel
-                target_file_path = target_file.relative_to(self.__cwd)
-                self.__logger.debug(f"Processing {src_file_path} -> {target_file_path} for language {language}")
-                self._write_target_file(parsed_file, language, target_file)
+            for src_root, parsed_files in all_root_files:
+                for parsed_file in parsed_files:
+                    src_file_path = parsed_file.src_file.relative_to(self.__cwd)
+                    rel = parsed_file.src_file.relative_to(src_root)
+                    target_file = src_root.parent / language / rel
+                    target_file_path = target_file.relative_to(self.__cwd)
+                    self.__logger.debug(f"Processing {src_file_path} -> {target_file_path} for language {language}")
+                    self._write_target_file(parsed_file, language, target_file)
 
         self.__translation_memory.save()
 
