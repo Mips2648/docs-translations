@@ -16,7 +16,7 @@ A single run can process multiple documentation roots (`documents_roots`) and ge
 
 ## Expected Structure
 
-By default, the documentation root is `docs`:
+By default, the documentation root is `docs` for a single-root use case (typical use case of a single plugin):
 
 ```text
 docs/
@@ -27,18 +27,21 @@ docs/
   .translation_memory/
 ```
 
-Multi-root example:
+If you have a central repository for your documentation, you probably have a structure like this multi-root example:
 
 ```text
 arlo/
   fr_FR/
   en_US/
-  .translation_memory/
+  es_ES/
 portainer/
   fr_FR/
   en_US/
-  .translation_memory/
+  es_ES/
+.translation_memory/
 ```
+
+In this case, the translation memory will be shared between all your documents
 
 ## Prerequisites
 
@@ -140,6 +143,7 @@ jobs:
 - Translations are written to `<documents_root>/<target_language>`.
 - Translation memory is stored as JSON, one file per language (`<language>.json`).
 - If no files change, the PR creation step does not create a PR.
+- This workflow does not create a glossary due to the limitation on deepl free account on which only one glossary is allowed. So it is assumed that you also use the action `Mips2648/plugins-translations` and that the glossary has been already created by this action.
 
 ## PR Behavior
 
