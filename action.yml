@@ -27,6 +27,11 @@ inputs:
     type: string
     required: true
     default: ''
+  use_glossary:
+    description: 'Whether to use a glossary for translations. Default: true'
+    type: boolean
+    required: false
+    default: true
   debug:
     description: 'Set log level to debug. Default: false'
     type: boolean
@@ -54,6 +59,7 @@ runs:
           target_languages: ${{ inputs.target_languages }}
           memory_path: ${{ inputs.memory_path }}
           deepl_api_key: ${{ inputs.deepl_api_key }}
+          use_glossary: ${{ inputs.use_glossary }}
           debug: ${{ inputs.debug }}
         run: |
           export PYTHONPATH=$PYTHONPATH:${{ github.action_path }}

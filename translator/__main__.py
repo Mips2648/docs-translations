@@ -35,6 +35,7 @@ def main() -> int:
         source_language = inputs_parser.read_one_of_str(INPUT_SOURCE_LANGUAGE, ALL_LANGUAGES)
         target_languages = inputs_parser.read_list(INPUT_TARGET_LANGUAGES, ALL_LANGUAGES)
         deepl_api_key = inputs_parser.read_str(INPUT_DEEPL_API_KEY)
+        use_glossary = inputs_parser.read_bool("use_glossary")
         debug = inputs_parser.read_bool(INPUT_DEBUG)
 
         documents_roots_str = inputs_parser.read_str("documents_roots", DEFAULT_DOCS_ROOT)
@@ -52,6 +53,7 @@ def main() -> int:
                 target_languages=target_languages,
                 docs_root=folder,
                 memory_path=memory_path,
+                use_glossary=use_glossary,
                 debug=debug,
             )
             result = translator.start()

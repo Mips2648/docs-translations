@@ -56,6 +56,16 @@ name: Translate documentation
 
 on:
   workflow_dispatch:
+    inputs:
+      target_languages:
+        description: "Comma-separated target languages"
+        required: false
+        default: "en_US,es_ES"
+  push:
+    branches:
+      - main
+    paths:
+      - '**/fr_FR/*.md'
 
 permissions:
   contents: write
@@ -70,6 +80,7 @@ jobs:
           deepl_api_key: ${{ secrets.DEEPL_API_KEY }}
           target_languages: "en_US,es_ES,de_DE"
           documents_roots: "arlo,portainer"
+          memory_path: ${{ github.workspace }}/.translation_memory
 ```
 
 ### Single-root Example (Default)
@@ -77,21 +88,51 @@ jobs:
 If your documentation is in `docs/<language>`, you only need to provide the DeepL key:
 
 ```yaml
-- uses: Mips2648/docs-translations@v1
-  with:
-    deepl_api_key: ${{ secrets.DEEPL_API_KEY }}
+name: Docs translate
+
+on:
+  workflow_dispatch:
+    inputs:
+      target_languages:
+        description: "Comma-separated target languages"
+        required: false
+        default: "de_DE,es_ES,en_US"
+  push:
+    branches:
+      - beta
+    paths:
+      - docs/fr_FR/*.md
+  pull_request:
+    branches:
+      - beta
+    paths:
+      - docs/fr_FR/*.md
+
+permissions:
+  contents: write
+  pull-requests: write
+
+jobs:
+  translate:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: Mips2648/docs-translations@v1
+        with:
+            deepl_api_key: ${{ secrets.DEEPL_API_KEY }}
+            target_languages: ${{ github.event_name == 'workflow_dispatch' && github.event.inputs.target_languages || 'en_US,es_ES,de_DE' }}
 ```
 
 ## Inputs
 
-| Name | Description | Type | Default |
-| --- | --- | --- | --- |
-| `deepl_api_key` | DeepL API key (required). | `string` | Required |
-| `source_language` | Source language folder. Supported values: `fr_FR`, `en_US`, `es_ES`, `de_DE`, `it_IT`, `pt_PT`. | `string` | `fr_FR` |
-| `target_languages` | Comma-separated list of target languages. Same supported values as above. | `string` | `en_US,es_ES,de_DE` |
-| `documents_roots` | Comma-separated documentation roots. Each entry is normalized, deduplicated, must be relative, and must not contain `..`. | `string` | `docs` |
-| `memory_path` | Path to the translation memory directory. If empty/not provided: `<documents_root>/.translation_memory`. | `string` | `""` |
-| `debug` | Enables verbose logs. Accepted values: `true`, `True`, `TRUE`, `false`, `False`, `FALSE`. | `boolean` | `false` |
+| Name               | Description                                                                                                                | Type      | Default             |
+|--------------------|----------------------------------------------------------------------------------------------------------------------------|-----------|---------------------|
+| `deepl_api_key`    | DeepL API key (required).                                                                                                  | `string`  | Required            |
+| `source_language`  | Source language folder. Supported values: `fr_FR`, `en_US`, `es_ES`, `de_DE`, `it_IT`, `pt_PT`.                            | `string`  | `fr_FR`             |
+| `target_languages` | Comma-separated list of target languages. Supported values: `fr_FR`, `en_US`, `es_ES`, `de_DE`, `it_IT`, `pt_PT`.          | `string`  | `en_US,es_ES,de_DE` |
+| `documents_roots`  | Comma-separated documentation roots. Entries are normalized and deduplicated, must be relative, and must not contain `..`. | `string`  | `docs`              |
+| `memory_path`      | Path to the translation memory directory. If empty or not provided: `<documents_root>/.translation_memory`.                | `string`  | `""`                |
+| `use_glossary`     | Whether to use an existing DeepL glossary from your account. (`true`, `True`, `TRUE`, `false`, `False`, `FALSE`)           | `boolean` | `true`              |
+| `debug`            | Enables verbose logs. Accepted values: `true`, `True`, `TRUE`, `false`, `False`, `FALSE`.                                  | `boolean` | `false`             |
 
 ## Important Notes
 

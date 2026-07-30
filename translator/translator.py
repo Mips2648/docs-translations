@@ -7,6 +7,7 @@ from typing import List
 from itertools import islice
 
 import deepl
+from deepl.api_data import MultilingualGlossaryInfo
 
 from .structured_files import StructuredMarkdownFile
 from .translation_memory import TranslationMemory
@@ -17,6 +18,7 @@ from .consts import (
     FR_FR,
     DEFAULT_DOCS_ROOT,
     LANGUAGES_TO_DEEPL,
+    LANGUAGES_TO_DEEPL_GLOSSARY,
     LOG_FORMAT,
 )
 
@@ -37,6 +39,7 @@ class Translator:
                  docs_root: str = DEFAULT_DOCS_ROOT,
                  source_language: str = FR_FR,
                  memory_path: str | None = None,
+                 use_glossary: bool = True,
                  debug: bool = False
                  ):
         self.__cwd = cwd.resolve()
@@ -55,7 +58,10 @@ class Translator:
         if debug:
             self.__logger.setLevel(logging.DEBUG)
 
-        self.__deepl_translator = deepl.Translator(deepl_api_key)
+        self.__deepl_client = deepl.DeepLClient(deepl_api_key)
+        self.__glossary: MultilingualGlossaryInfo | None = None
+        self.__use_glossary = use_glossary
+
         self.__api_call_counter = 0
         self.__translated_lines_count = 0
         self.__updated_files_count = 0
@@ -168,8 +174,7 @@ class Translator:
                 batch_texts = list(islice(it, batch_size))
                 if not batch_texts:
                     break
-                deepl_lang = LANGUAGES_TO_DEEPL[language]
-                translated = self._deepl_translate(deepl_lang, batch_texts)
+                translated = self._deepl_translate(language, batch_texts)
 
                 for src, tgt in zip(batch_texts, translated):
                     self.__translated_lines_count += 1
@@ -180,7 +185,15 @@ class Translator:
             return []
 
         try:
-            translations = self.__deepl_translator.translate_text(texts, target_lang=target_lang)
+            translations = self.__deepl_client.translate_text(
+                texts,
+                source_lang=LANGUAGES_TO_DEEPL[self.__source_language],
+                target_lang=LANGUAGES_TO_DEEPL[target_lang],
+                preserve_formatting=True,
+                context='home automation',
+                glossary=self.__get_deepl_glossary_for_language(target_lang),
+                model_type='prefer_quality_optimized'
+            )
         except deepl.DeepLException as exc:
             raise RuntimeError(f"DeepL error: {exc}") from exc
 
@@ -193,6 +206,23 @@ class Translator:
         if len(result) != len(texts):
             raise RuntimeError("DeepL response size mismatch")
         return result
+
+    def __get_deepl_glossary_for_language(self, target_lang: str) -> MultilingualGlossaryInfo | None:
+        """Return the DeepL glossary if available for the given target language."""
+        if not self.__use_glossary:
+            return None
+
+        if not self.__glossary:
+            for deepl_glossary in self.__deepl_client.list_multilingual_glossaries():
+                self.__logger.info(f"Found glossary: {deepl_glossary.name} (ID: {deepl_glossary.glossary_id})")
+                self.__glossary = deepl_glossary
+
+        deepl_target_language = LANGUAGES_TO_DEEPL_GLOSSARY[target_lang]
+        return self.__glossary if (
+            self.__glossary is not None
+            and deepl_target_language is not None
+            and any(dictionary.target_lang == deepl_target_language for dictionary in self.__glossary.dictionaries)
+        ) else None
 
     def __iter_markdown_files(self, root: Path) -> List[Path]:
         return sorted([p for p in root.rglob("*.md") if p.is_file()])
