@@ -120,7 +120,7 @@ def test_process_file_preserves_front_matter_keys_and_updates_lang(tmp_path: Pat
     )
     mapping = {
         "Bonjour": "Hola",
-        "Documentation Arlo": "Documentación Arlo"
+        "Ceci est un super plugin": "Este es un gran complemento",
     }
 
     translator._deepl_translate = lambda target_lang, texts: [mapping[t] for t in texts]
@@ -133,9 +133,10 @@ def test_process_file_preserves_front_matter_keys_and_updates_lang(tmp_path: Pat
     target_file = target_root / "index.md"
     src_file.write_text(
         "---\n"
-        "layout: default\n"
-        "title: Documentation Arlo\n"
-        "lang: fr_FR\n"
+        "layout : default\n"
+        "title : Ceci est un super plugin\n"
+        "plugin : Défauts\n"
+        "lang : fr_FR\n"
         "pluginId: arlo\n"
         "---\n"
         "\n"
@@ -150,9 +151,10 @@ def test_process_file_preserves_front_matter_keys_and_updates_lang(tmp_path: Pat
 
     assert target_file.read_text(encoding="utf-8") == (
         "---\n"
-        "layout: default\n"
-        "title: Documentación Arlo\n"
-        "lang: es_ES\n"
+        "layout : default\n"
+        "title : Este es un gran complemento\n"
+        "plugin : Défauts\n"
+        "lang : es_ES\n"
         "pluginId: arlo\n"
         "---\n"
         "\n"
