@@ -4,6 +4,8 @@ A composite GitHub Action that translates Markdown documentation with DeepL and 
 
 [![Tests](https://github.com/Mips2648/docs-translations/actions/workflows/pytest.yml/badge.svg)](https://github.com/Mips2648/docs-translations/actions/workflows/pytest.yml)
 
+[![Sponsor Mips2648](https://img.shields.io/badge/Sponsor-Mips2648-ea4aaa?logo=githubsponsors)](https://github.com/sponsors/Mips2648)
+
 ## How It Works
 
 The action:
@@ -213,5 +215,4 @@ The PR includes changes from all processed roots in the run.
 
 ## Sponsor
 
-<iframe src="https://github.com/sponsors/Mips2648/card" title="Sponsor Mips2648" height="225" width="600" style="border: 0;"></iframe>
-<iframe src="https://github.com/sponsors/Mips2648/button" title="Sponsor Mips2648" height="32" width="114" style="border: 0; border-radius: 6px;"></iframe>
+[![Sponsor Mips2648](https://img.shields.io/badge/Sponsor-Mips2648-ea4aaa?logo=githubsponsors)](https://github.com/sponsors/Mips2648)
