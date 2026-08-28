@@ -210,3 +210,7 @@ The action uses `peter-evans/create-pull-request` with:
 - commit message: `chore(docs): update translations`
 
 The PR includes changes from all processed roots in the run.
+
+## Sponsor
+
+<iframe src="https://github.com/sponsors/Mips2648/card" title="Sponsor Mips2648" height="225" width="600" style="border: 0;"></iframe>
