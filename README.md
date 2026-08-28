@@ -3,7 +3,6 @@
 A composite GitHub Action that translates Markdown documentation with DeepL and proposes changes through a pull request.
 
 [![Tests](https://github.com/Mips2648/docs-translations/actions/workflows/pytest.yml/badge.svg)](https://github.com/Mips2648/docs-translations/actions/workflows/pytest.yml)
-
 [![Sponsor Mips2648](https://img.shields.io/badge/Sponsor-Mips2648-ea4aaa?logo=githubsponsors)](https://github.com/sponsors/Mips2648)
 
 ## How It Works
@@ -212,7 +211,3 @@ The action uses `peter-evans/create-pull-request` with:
 - commit message: `chore(docs): update translations`
 
 The PR includes changes from all processed roots in the run.
-
-## Sponsor
-
-[![Sponsor Mips2648](https://img.shields.io/badge/Sponsor-Mips2648-ea4aaa?logo=githubsponsors)](https://github.com/sponsors/Mips2648)
