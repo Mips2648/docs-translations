@@ -222,16 +222,19 @@ class Translator:
             return None
 
         if not self.__glossary:
-            for deepl_glossary in self.__deepl_client.list_multilingual_glossaries():
-                self.__logger.info(f"Found glossary: {deepl_glossary.name}")
-                self.__glossary = deepl_glossary
+            self.__glossary = next(iter(self.__deepl_client.list_multilingual_glossaries()), None)
+            if self.__glossary is not None:
+                self.__logger.info(f"Found glossary: {self.__glossary.name}")
+            else:
+                self.__logger.warning("No multilingual glossary found in DeepL account.")
+                return None
 
-        deepl_target_language = LANGUAGES_TO_DEEPL_GLOSSARY[target_lang]
-        return self.__glossary if (
-            self.__glossary is not None
-            and deepl_target_language is not None
-            and any(dictionary.target_lang == deepl_target_language for dictionary in self.__glossary.dictionaries)
-        ) else None
+        try:
+            deepl_target_language = LANGUAGES_TO_DEEPL_GLOSSARY[target_lang]
+        except KeyError:
+            self.__logger.warning(f"Language '{target_lang}' not supported for glossary")
+            return None
+        return self.__glossary if any(d.target_lang == deepl_target_language for d in self.__glossary.dictionaries) else None
 
     def __iter_markdown_files(self, root: Path) -> List[Path]:
         return sorted([p for p in root.rglob("*.md") if p.is_file()])
