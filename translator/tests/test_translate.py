@@ -44,6 +44,74 @@ def test_multiple_docs_roots_require_memory_path(tmp_path: Path) -> None:
         )
 
 
+def test_get_deepl_glossary_for_language_returns_compatible_glossary(tmp_path: Path, monkeypatch) -> None:
+    glossary = type("Glossary", (), {
+        "name": "Documentation terms",
+        "dictionaries": [type("Dictionary", (), {"target_lang": "EN"})()],
+    })()
+    received = {}
+    client = type("DeepLClient", (), {
+        "list_multilingual_glossaries": lambda self: [glossary],
+        "translate_text": lambda self, *args, **kwargs: received.update(kwargs) or type(
+            "Translation", (), {"text": "Hello"}
+        )(),
+    })()
+    monkeypatch.setattr("translator.translator.deepl.DeepLClient", lambda key: client)
+    translator = Translator(
+        deepl_api_key="dummy-key",
+        target_languages=["en_US"],
+        cwd=tmp_path,
+    )
+
+    translator._deepl_translate("en_US", ["Bonjour"])
+
+    assert received["glossary"] is glossary
+
+
+def test_get_deepl_glossary_for_language_returns_none_for_incompatible_language(tmp_path: Path, monkeypatch) -> None:
+    glossary = type("Glossary", (), {
+        "name": "Documentation terms",
+        "dictionaries": [type("Dictionary", (), {"target_lang": "DE"})()],
+    })()
+    received = {}
+    client = type("DeepLClient", (), {
+        "list_multilingual_glossaries": lambda self: [glossary],
+        "translate_text": lambda self, *args, **kwargs: received.update(kwargs) or type(
+            "Translation", (), {"text": "Hello"}
+        )(),
+    })()
+    monkeypatch.setattr("translator.translator.deepl.DeepLClient", lambda key: client)
+    translator = Translator(
+        deepl_api_key="dummy-key",
+        target_languages=["en_US"],
+        cwd=tmp_path,
+    )
+
+    translator._deepl_translate("en_US", ["Bonjour"])
+
+    assert received["glossary"] is None
+
+
+def test_get_deepl_glossary_for_language_returns_none_when_no_glossary_exists(tmp_path: Path, monkeypatch) -> None:
+    received = {}
+    client = type("DeepLClient", (), {
+        "list_multilingual_glossaries": lambda self: [],
+        "translate_text": lambda self, *args, **kwargs: received.update(kwargs) or type(
+            "Translation", (), {"text": "Hello"}
+        )(),
+    })()
+    monkeypatch.setattr("translator.translator.deepl.DeepLClient", lambda key: client)
+    translator = Translator(
+        deepl_api_key="dummy-key",
+        target_languages=["en_US"],
+        cwd=tmp_path,
+    )
+
+    translator._deepl_translate("en_US", ["Bonjour"])
+
+    assert received["glossary"] is None
+
+
 def test_process_file_preserves_front_matter_keys_and_updates_lang(tmp_path: Path) -> None:
     translator = Translator(
         deepl_api_key="dummy-key",
