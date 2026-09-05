@@ -70,6 +70,6 @@ runs:
         with:
           branch: docs-translations
           delete-branch: true
-          title: "[CI] Update docs translations"
-          commit-message: "chore(docs): update translations"
+          title: "[skip ci] Update docs translations"
+          commit-message: "[skip ci] update docs translations"
           body: "Automated translations done by [Mips2648/docs-translations workflow](https://github.com/Mips2648/docs-translations)"
