@@ -70,6 +70,7 @@ runs:
         with:
           branch: docs-translations
           delete-branch: true
-          title: "[CI] Update docs translations"
+          title: "docs: Update docs translations"
+          assignees: ${{ github.repository_owner }}
           commit-message: "chore(docs): update translations"
           body: "Automated translations done by [Mips2648/docs-translations workflow](https://github.com/Mips2648/docs-translations)"
