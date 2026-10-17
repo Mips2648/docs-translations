@@ -120,7 +120,7 @@ def test_process_file_preserves_front_matter_keys_and_updates_lang(tmp_path: Pat
     )
     mapping = {
         "Bonjour": "Hola",
-        "Documentation Arlo": "Documentación Arlo"
+        "Ceci est un super plugin": "Este es un gran complemento",
     }
 
     translator._deepl_translate = lambda target_lang, texts: [mapping[t] for t in texts]
@@ -133,9 +133,10 @@ def test_process_file_preserves_front_matter_keys_and_updates_lang(tmp_path: Pat
     target_file = target_root / "index.md"
     src_file.write_text(
         "---\n"
-        "layout: default\n"
-        "title: Documentation Arlo\n"
-        "lang: fr_FR\n"
+        "layout : default\n"
+        "title : Ceci est un super plugin\n"
+        "plugin : Défauts\n"
+        "lang : fr_FR\n"
         "pluginId: arlo\n"
         "---\n"
         "\n"
@@ -150,14 +151,57 @@ def test_process_file_preserves_front_matter_keys_and_updates_lang(tmp_path: Pat
 
     assert target_file.read_text(encoding="utf-8") == (
         "---\n"
-        "layout: default\n"
-        "title: Documentación Arlo\n"
-        "lang: es_ES\n"
+        "layout : default\n"
+        "title : Este es un gran complemento\n"
+        "plugin : Défauts\n"
+        "lang : es_ES\n"
         "pluginId: arlo\n"
         "---\n"
         "\n"
         "# Hola\n"
     )
+
+
+def test_html_embed_lines_are_not_translated(tmp_path: Path) -> None:
+    """Lines that are HTML embeds (link wrapping an image, iframe) must be copied as-is
+    and must never be sent to DeepL, since they contain no bare text between the tags."""
+    translator = Translator(
+        deepl_api_key="dummy-key",
+        target_languages=["es_ES"],
+        cwd=tmp_path
+    )
+
+    def _fail_if_called(target_lang, texts):
+        raise AssertionError(f"DeepL should not be called for HTML embed lines, got: {texts}")
+
+    translator._deepl_translate = _fail_if_called
+
+    src_root = tmp_path / "docs" / FR_FR
+    target_root = tmp_path / "docs" / "es_ES"
+    src_root.mkdir(parents=True)
+
+    link_with_image_line = (
+        '<a href="https://example.com/something" target="_blank">'
+        '<img src="https://example.com/images/button.png" '
+        'alt="Donate" height="41" width="174"></a>'
+    )
+    embed_line = (
+        '<iframe src="https://example.com/embed/widget" title="Widget" '
+        'height="225" width="600" style="border: 0;"></iframe>'
+    )
+
+    src_file = src_root / "index.md"
+    src_file.write_text(f"{link_with_image_line}\n{embed_line}\n", encoding="utf-8")
+
+    parsed_file = StructuredMarkdownFile(src_file)
+    parsed_file.parse()
+
+    assert parsed_file.get_translatable_texts() == set()
+
+    target_file = target_root / "index.md"
+    translator._write_target_file(parsed_file, "es_ES", target_file)
+
+    assert target_file.read_text(encoding="utf-8") == f"{link_with_image_line}\n{embed_line}\n"
 
 
 def test_start_translates_nested_source_language_directories(tmp_path: Path) -> None:

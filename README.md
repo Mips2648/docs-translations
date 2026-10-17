@@ -3,6 +3,7 @@
 A composite GitHub Action that translates Markdown documentation with DeepL and proposes changes through a pull request.
 
 [![Tests](https://github.com/Mips2648/docs-translations/actions/workflows/pytest.yml/badge.svg)](https://github.com/Mips2648/docs-translations/actions/workflows/pytest.yml)
+[![Sponsor Mips2648](https://img.shields.io/badge/Sponsor-Mips2648-ea4aaa?logo=githubsponsors)](https://github.com/sponsors/Mips2648)
 
 ## How It Works
 
@@ -166,6 +167,40 @@ jobs:
 - Translation memory is stored as JSON, one file per language (`<language>.json`).
 - If no files change, the PR creation step does not create a PR.
 - This workflow does not create a glossary due to the limitation on deepl free account on which only one glossary is allowed. So it is assumed that you also use the action `Mips2648/plugins-translations` and that the glossary has been already created by this action.
+
+### Front Matter
+
+Markdown front matter is processed when it starts at the beginning of a file with `---`, contains at least one `key: value` entry, and ends with another `---` before any other non-empty content.
+
+The values of the following keys are translated when they contain alphabetic characters:
+
+```text
+title, description, summary, excerpt, subtitle, headline
+```
+
+The `lang` value is handled specially: the source language is replaced directly with the target language and is not sent to DeepL. Keys and non-translatable values are preserved. For other keys, an unquoted value is translated only when it contains whitespace, while a quoted value is translated when it contains alphabetic characters.
+
+For example, when translating to `es_ES`:
+
+```yaml
+---
+layout : default
+title : Plugin pour faire le café
+plugin : Défauts
+lang : fr_FR
+---
+```
+
+becomes conceptually:
+
+```yaml
+---
+layout : default
+title : <translated title>
+plugin : Défauts
+lang : es_ES
+---
+```
 
 ## PR Behavior
 

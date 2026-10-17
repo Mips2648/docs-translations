@@ -10,6 +10,9 @@ HEADING_RE = re.compile(r"^(#{1,6}\s+)(.+)$")
 LIST_RE = re.compile(r"^(\s*(?:(?:[-*+]\s+|\d+\.\s+|>\s+)+))(.+)$")
 FRONT_MATTER_LINE_RE = re.compile(r"^(\s*)([^:#][^:]*?)(\s*:\s*)(.*)$")
 FRONT_MATTER_TEXT_KEYS = {"title", "description", "summary", "excerpt", "subtitle", "headline", "lang"}
+HTML_ELEMENT_RE = re.compile(r"^(<([a-zA-Z][\w-]*)\b[^>]*>)(.*)(</\2\s*>)$", re.DOTALL)
+HTML_SINGLE_TAG_RE = re.compile(r"^<[a-zA-Z][^>]*>$", re.DOTALL)
+INNER_TAG_RE = re.compile(r"<[^>]+>")
 
 
 class _Line():
@@ -162,6 +165,21 @@ class StructuredMarkdownFile():
             return
 
         plain = stripped.strip()
+
+        html_element = HTML_ELEMENT_RE.match(plain)
+        if html_element:
+            inner = html_element.group(3)
+            # Only translate bare text between matching tags; skip anything containing nested tags.
+            if not INNER_TAG_RE.search(inner) and self.__looks_translatable(inner):
+                self.__add_translatable_line(html_element.group(1), inner, html_element.group(4))
+                return
+            self.__add_non_translatable_line(line)
+            return
+
+        if HTML_SINGLE_TAG_RE.match(plain):
+            self.__add_non_translatable_line(line)
+            return
+
         if self.__looks_translatable(plain):
             self.__add_translatable_line("", plain)
             return
